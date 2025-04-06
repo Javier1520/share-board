@@ -1,88 +1,82 @@
 # Share Board
 
-A real-time collaborative platform for video conferencing, drawing, and text collaboration.
+A real-time collaborative whiteboard application built with Django, Next.js, and WebSockets.
 
 ## Features
 
-- Real-time video conferencing
-- Collaborative drawing canvas
-- Real-time text collaboration
-- Mobile-first responsive design
-- Dark mode by default
-- JWT authentication
+- Real-time collaborative drawing
 - Room-based collaboration
-- WebSocket real-time communication
+- User authentication
+- Responsive design
+- Dark mode support
 
 ## Tech Stack
 
 ### Backend
 
-- Django with Django REST Framework
+- Django 5.0
+- Django REST Framework
+- Django Channels for WebSockets
 - PostgreSQL
-- JWT authentication
-- Django Channels for WebSocket
-- Python 3.10
+- JWT Authentication
 - Pipenv for dependency management
 
 ### Frontend
 
-- Next.js with TypeScript
+- Next.js
+- TypeScript
 - Tailwind CSS
-- shadcn/ui components
-- WebSocket client
-- Mobile-first responsive design
+- Socket.io Client
 
 ## Prerequisites
 
-- Python 3.10
-- Node.js 18+
+- Python 3.10+
+- Node.js 16+
 - PostgreSQL
 - AWS Account (for deployment)
+- Pipenv
 
-## Project Structure
-
-```
-share-board/
-├── backend/           # Django backend
-│   ├── Pipfile       # Python dependencies
-│   ├── manage.py
-│   └── share_board/  # Django project
-└── frontend/         # Next.js frontend
-    ├── package.json
-    └── src/          # Source code
-```
-
-## Getting Started
+## Local Development
 
 ### Backend Setup
 
-1. Navigate to the backend directory:
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/yourusername/share-board.git
+   cd share-board
+   ```
+
+2. Install dependencies using Pipenv:
 
    ```bash
    cd backend
-   ```
-
-2. Install dependencies:
-
-   ```bash
    pipenv install
    ```
 
-3. Activate the virtual environment:
+3. Create a `.env` file:
 
    ```bash
-   pipenv shell
+   cp .env.example .env
    ```
+
+   Edit the `.env` file with your local settings.
 
 4. Run migrations:
 
    ```bash
-   python manage.py migrate
+   pipenv run python manage.py migrate
    ```
 
-5. Start the development server:
+5. Create a superuser:
+
    ```bash
-   python manage.py runserver
+   pipenv run python manage.py createsuperuser
+   ```
+
+6. Start the development server:
+   ```bash
+   pipenv run python manage.py runserver
    ```
 
 ### Frontend Setup
@@ -99,30 +93,99 @@ share-board/
    npm install
    ```
 
-3. Start the development server:
+3. Create a `.env.local` file:
+
+   ```bash
+   cp .env.example .env.local
+   ```
+
+4. Start the development server:
+
    ```bash
    npm run dev
    ```
 
+5. Open your browser and navigate to `http://localhost:3000`
+
 ## AWS Deployment
 
-The project is configured for AWS Free Tier deployment:
+### Prerequisites
 
-1. EC2 instance for hosting
-2. RDS for PostgreSQL database
-3. S3 for static files
-4. CloudFront for CDN (optional)
+- AWS Account
+- AWS CLI configured
+- Domain name (optional)
 
-Detailed deployment instructions are available in the deployment guide.
+### Deployment Steps
 
-## Contributing
+1. Create an EC2 instance (t2.micro for free tier)
+2. Set up an RDS PostgreSQL instance (t3.micro for free tier)
+3. Create an S3 bucket for static files
+4. Set up CloudFront for CDN (optional)
+5. Configure environment variables for production
 
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
+### Backend Deployment
+
+1. SSH into your EC2 instance
+2. Clone the repository
+3. Install dependencies using Pipenv
+4. Configure the `.env` file with production settings
+5. Set up Gunicorn and Nginx
+6. Configure SSL with Let's Encrypt
+
+### Frontend Deployment
+
+1. Build the frontend:
+
+   ```bash
+   cd frontend
+   npm run build
+   ```
+
+2. Deploy to Vercel or AWS Amplify:
+   ```bash
+   vercel
+   ```
+
+## Environment Variables
+
+### Backend (.env)
+
+```
+DEBUG=False
+SECRET_KEY=your-secret-key-here
+ALLOWED_HOSTS=localhost,127.0.0.1,your-aws-domain.com
+CORS_ALLOWED_ORIGINS=http://localhost:3000,https://your-aws-domain.com
+
+# Database
+DB_NAME=share_board
+DB_USER=postgres
+DB_PASSWORD=your-password-here
+DB_HOST=localhost
+DB_PORT=5432
+
+# JWT Settings
+JWT_ACCESS_TOKEN_LIFETIME=5
+JWT_REFRESH_TOKEN_LIFETIME=1440
+
+# AWS Settings (for production)
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+AWS_STORAGE_BUCKET_NAME=your-s3-bucket-name
+AWS_S3_REGION_NAME=us-east-1
+AWS_S3_CUSTOM_DOMAIN=your-cloudfront-domain.cloudfront.net
+```
+
+### Frontend (.env.local)
+
+```
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_WS_URL=ws://localhost:8000
+
+# For production
+# NEXT_PUBLIC_API_URL=https://your-aws-domain.com/api
+# NEXT_PUBLIC_WS_URL=wss://your-aws-domain.com
+```
 
 ## License
 
-This project is licensed under the MIT License.
+MIT
