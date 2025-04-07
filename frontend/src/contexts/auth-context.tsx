@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axios, { AxiosError } from "axios";
+import { auth } from "@/lib/auth";
 
 interface User {
   id: number;
@@ -26,7 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = auth.getToken();
     if (token) {
       fetchUser(token);
     } else {
@@ -49,19 +50,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error instanceof AxiosError) {
         console.error("Failed to fetch user:", error.message);
       }
-      localStorage.removeItem("token");
+      auth.removeToken();
     } finally {
       setLoading(false);
     }
   };
 
   const login = (token: string) => {
-    localStorage.setItem("token", token);
+    auth.setToken(token);
     fetchUser(token);
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
+    auth.removeToken();
     setUser(null);
   };
 

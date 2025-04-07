@@ -34,8 +34,12 @@ export default function LoginPage() {
       }
 
       const data = await response.json();
-      login(data.access);
-      router.push("/");
+      if (data.access) {
+        login(data.access);
+        router.push("/");
+      } else {
+        throw new Error("Invalid token response");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {

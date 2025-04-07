@@ -1,4 +1,4 @@
-const TOKEN_KEY = "share_board_token";
+const TOKEN_KEY = "token";
 
 export const auth = {
   getToken: (): string | null => {
