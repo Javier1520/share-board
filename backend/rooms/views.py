@@ -12,7 +12,9 @@ class RoomViewSet(viewsets.ModelViewSet):
     lookup_url_kwarg = 'code'  # Add this line
 
     def get_queryset(self):
-        return Room.objects.filter(participants=self.request.user) | Room.objects.filter(host=self.request.user)
+        if self.action == 'list':
+            return Room.objects.filter(participants=self.request.user) | Room.objects.filter(host=self.request.user)
+        return Room.objects.all()
 
     def perform_create(self, serializer):
         serializer.save(host=self.request.user)
@@ -48,10 +50,12 @@ class MessageViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Message.objects.filter(room_id=self.kwargs['room_pk'])
+        room_code = self.kwargs['room_code']
+        return Message.objects.filter(room__code=room_code)
 
     def perform_create(self, serializer):
-        room = get_object_or_404(Room, pk=self.kwargs['room_pk'])
+        room_code = self.kwargs['room_code']
+        room = get_object_or_404(Room, code=room_code)
         serializer.save(sender=self.request.user, room=room)
 
 class DrawingViewSet(viewsets.ModelViewSet):
@@ -59,8 +63,10 @@ class DrawingViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Drawing.objects.filter(room_id=self.kwargs['room_pk'])
+        room_code = self.kwargs['room_code']
+        return Drawing.objects.filter(room__code=room_code)
 
     def perform_create(self, serializer):
-        room = get_object_or_404(Room, pk=self.kwargs['room_pk'])
+        room_code = self.kwargs['room_code']
+        room = get_object_or_404(Room, code=room_code)
         serializer.save(user=self.request.user, room=room)
