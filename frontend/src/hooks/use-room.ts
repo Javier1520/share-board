@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
 import { useWebSocket } from "@/contexts/websocket-context";
 import { rooms } from "@/lib/api";
 
@@ -26,8 +28,14 @@ interface DrawingData {
 }
 
 interface Room {
+  id: string;
   code: string;
+  host: {
+    id: string;
+    username: string;
+  };
   participants: Participant[];
+  is_active: boolean;
 }
 
 interface Message {
@@ -40,7 +48,7 @@ interface Message {
   drawing?: Drawing;
 }
 
-export function useRoom(roomCode: string) {
+export function useRoom(roomCode: string | undefined) {
   const { socket, isConnected } = useWebSocket();
   const [room, setRoom] = useState<Room | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -49,48 +57,59 @@ export function useRoom(roomCode: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchRoom = async () => {
-      try {
-        const roomData = await rooms.get(roomCode);
-        setRoom(roomData);
-        setParticipants(roomData.participants);
-        setLoading(false);
-      } catch (error) {
-        console.error("Failed to fetch room:", error);
-        setError("Failed to load room");
-        setLoading(false);
-      }
-    };
+  const fetchRoom = useCallback(async () => {
+    if (!roomCode) {
+      setError("Room code is required");
+      setLoading(false);
+      return;
+    }
 
-    fetchRoom();
+    try {
+      setLoading(true);
+      setError(null);
+      const roomData = await rooms.get(roomCode);
+      setRoom(roomData);
+      setParticipants(roomData.participants || []);
+    } catch (err) {
+      console.error("Failed to fetch room:", err);
+      setError(
+        "Failed to load room. Please check the room code and try again."
+      );
+    } finally {
+      setLoading(false);
+    }
   }, [roomCode]);
 
   useEffect(() => {
-    if (!socket || !isConnected) return;
+    fetchRoom();
+  }, [fetchRoom]);
 
-    socket.emit("join_room", { roomCode });
+  useEffect(() => {
+    if (!socket || !isConnected || !roomCode) return;
 
     const handleMessage = (message: Message) => {
       setMessages((prev) => [...prev, message]);
 
-      if (message.type === "participant_joined") {
-        const username = message.user?.username;
-        if (username) {
-          setParticipants((prev) => [
-            ...prev,
-            { id: message.user!.id, username },
-          ]);
-        }
-      } else if (message.type === "participant_left") {
+      if (message.type === "participant_joined" && message.user) {
+        setParticipants((prev) => [
+          ...prev,
+          { id: message.user.id, username: message.user.username },
+        ]);
+      } else if (message.type === "participant_left" && message.user) {
         setParticipants((prev) =>
           prev.filter((p) => p.id !== message.user?.id)
         );
       } else if (message.type === "drawing" && message.drawing) {
-        setDrawings((prev) => [...prev, message.drawing as Drawing]);
+        setDrawings((prev) => [...prev, message.drawing]);
+      } else if (
+        message.type === "initial_drawings" &&
+        Array.isArray(message.content)
+      ) {
+        setDrawings(message.content);
       }
     };
 
+    socket.emit("join_room", { roomCode });
     socket.on("message", handleMessage);
 
     return () => {
@@ -99,20 +118,26 @@ export function useRoom(roomCode: string) {
     };
   }, [socket, isConnected, roomCode]);
 
-  const sendMessage = async (content: string) => {
-    if (!socket || !isConnected) return;
-    socket.emit("message", { roomCode, content });
-  };
+  const sendMessage = useCallback(
+    (content: string) => {
+      if (!socket || !isConnected || !roomCode) return;
+      socket.emit("message", { roomCode, content, type: "chat" });
+    },
+    [socket, isConnected, roomCode]
+  );
 
-  const sendDrawing = async (data: DrawingData) => {
-    if (!socket || !isConnected) return;
-    socket.emit("drawing", { roomCode, ...data });
-  };
+  const sendDrawing = useCallback(
+    (data: DrawingData) => {
+      if (!socket || !isConnected || !roomCode) return;
+      socket.emit("drawing", { roomCode, ...data });
+    },
+    [socket, isConnected, roomCode]
+  );
 
-  const leaveRoom = async () => {
-    if (!socket || !isConnected) return;
+  const leaveRoom = useCallback(() => {
+    if (!socket || !isConnected || !roomCode) return;
     socket.emit("leave_room", { roomCode });
-  };
+  }, [socket, isConnected, roomCode]);
 
   return {
     room,
@@ -125,5 +150,6 @@ export function useRoom(roomCode: string) {
     sendMessage,
     sendDrawing,
     leaveRoom,
+    refetch: fetchRoom,
   };
 }

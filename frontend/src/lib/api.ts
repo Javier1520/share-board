@@ -29,7 +29,7 @@ interface Message {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
-async function fetchApi(endpoint: string, options: RequestInit = {}) {
+const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
   const token = auth.getToken();
   const headers = {
     "Content-Type": "application/json",
@@ -37,25 +37,43 @@ async function fetchApi(endpoint: string, options: RequestInit = {}) {
     ...options.headers,
   };
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  try {
+    console.log(`Making API request to: ${API_URL}${endpoint}`);
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
 
-  if (!response.ok) {
-    throw new Error(`API error: ${response.statusText}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("API Error:", {
+        status: response.status,
+        statusText: response.statusText,
+        data: errorData,
+      });
+      throw new Error(`API error: ${response.statusText}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error("API Request failed:", error);
+    throw error;
   }
-
-  return response.json();
-}
+};
 
 export const rooms = {
   create: async (): Promise<Room> => {
-    return fetchApi("/rooms/", { method: "POST" });
+    console.log("Creating new room...");
+    const room = await fetchApi("/rooms/", { method: "POST" });
+    console.log("Room created:", room);
+    return room;
   },
 
   get: async (code: string): Promise<Room> => {
-    return fetchApi(`/rooms/${code}/`);
+    console.log(`Fetching room with code: ${code}`);
+    const room = await fetchApi(`/rooms/${code}/`);
+    console.log("Room fetched:", room);
+    return room;
   },
 
   join: async (code: string): Promise<void> => {

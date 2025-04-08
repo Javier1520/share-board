@@ -7,12 +7,15 @@ import { useRoom } from "@/hooks/use-room";
 import { Canvas } from "@/components/canvas";
 import { Participants } from "@/components/participants";
 import { Toolbar } from "@/components/toolbar";
+//import { LoadingSpinner } from "@/components/loading-spinner";
 
 export default function RoomPage() {
   const params = useParams();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
-  const { room, participants, error, loading } = useRoom(params.code as string);
+  const { room, participants, error, loading, leaveRoom } = useRoom(
+    params.code as string
+  );
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -20,10 +23,15 @@ export default function RoomPage() {
     }
   }, [isAuthenticated, router]);
 
+  const handleLeaveRoom = () => {
+    leaveRoom();
+    router.push("/");
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-foreground">Loading...</div>
+        Loading...
       </div>
     );
   }
@@ -60,7 +68,7 @@ export default function RoomPage() {
               Room: {room.code}
             </h1>
             <button
-              onClick={() => router.push("/")}
+              onClick={handleLeaveRoom}
               className="px-4 py-2 text-sm font-medium text-white bg-destructive hover:bg-destructive/90 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-destructive"
             >
               Leave Room

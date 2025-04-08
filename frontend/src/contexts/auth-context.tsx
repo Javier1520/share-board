@@ -45,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
         }
       );
+      console.log("User fetched:", response.data);
       setUser(response.data);
     } catch (error: unknown) {
       if (error instanceof AxiosError) {
