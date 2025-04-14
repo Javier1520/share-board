@@ -14,7 +14,7 @@ class RoomConsumer(AsyncWebsocketConsumer):
             self.room_code = self.scope['url_route']['kwargs']['room_code']
             self.room_group_name = f'room_{self.room_code}'
             self.user = self.scope['user']
-            
+
             logger.info(f"User {self.user.username if self.user.is_authenticated else 'anonymous'} attempting to connect to room {self.room_code}")
 
             # Validate authentication
@@ -52,12 +52,12 @@ class RoomConsumer(AsyncWebsocketConsumer):
         """Handle WebSocket disconnection."""
         try:
             logger.info(f"User {self.user.username if hasattr(self, 'user') and self.user.is_authenticated else 'anonymous'} disconnecting from room {self.room_code if hasattr(self, 'room_code') else 'unknown'}, close code: {close_code}")
-            
+
             if hasattr(self, 'room_group_name') and hasattr(self, 'channel_name'):
                 # Notify others about the user leaving
                 if hasattr(self, 'user') and self.user.is_authenticated:
                     await self.handle_user_leave({})
-                
+
                 await self.channel_layer.group_discard(
                     self.room_group_name,
                     self.channel_name
