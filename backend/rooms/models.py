@@ -11,6 +11,8 @@ class Room(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    drawing_data = models.JSONField(default=dict)  # Store drawing data as JSON
+    shared_text = models.TextField(blank=True)  # Store shared text
 
     class Meta:
         ordering = ['-created_at']
