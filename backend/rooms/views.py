@@ -2,14 +2,14 @@ from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Room, Message, Drawing
-from .serializers import RoomSerializer, MessageSerializer, DrawingSerializer
+from .models import Room, Message
+from .serializers import RoomSerializer, MessageSerializer
 
 class RoomViewSet(viewsets.ModelViewSet):
     serializer_class = RoomSerializer
     permission_classes = [permissions.IsAuthenticated]
-    lookup_field = 'code'  # Change from pk to code
-    lookup_url_kwarg = 'code'  # Add this line
+    lookup_field = 'code'
+    lookup_url_kwarg = 'code'
 
     def get_queryset(self):
         if self.action == 'list':
@@ -18,32 +18,39 @@ class RoomViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(host=self.request.user)
-        # Add logging
-        print(f"Created room with code: {serializer.instance.code}")
 
     @action(detail=True, methods=['post'])
-    def join(self, request, code=None):  # Change pk to code
+    def join(self, request, code=None):
         room = self.get_object()
-        print(f"User {request.user} attempting to join room {code}")
         if room.is_active:
             room.participants.add(request.user)
-            print(f"User {request.user} successfully joined room {code}")
             return Response({'status': 'joined room'})
         return Response({'status': 'room is not active'}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'])
-    def leave(self, request, code=None):  # Change pk to code
+    def leave(self, request, code=None):
         room = self.get_object()
-        print(f"User {request.user} attempting to leave room {code}")
         if request.user == room.host:
             room.is_active = False
             room.save()
-            print(f"Host {request.user} closed room {code}")
             return Response({'status': 'room closed'})
         else:
             room.participants.remove(request.user)
-            print(f"User {request.user} left room {code}")
             return Response({'status': 'left room'})
+
+    @action(detail=True, methods=['patch'])
+    def update_drawing(self, request, code=None):
+        room = self.get_object()
+        room.drawing_data = request.data.get('drawing_data', {})
+        room.save()
+        return Response({'status': 'drawing updated'})
+
+    @action(detail=True, methods=['patch'])
+    def update_text(self, request, code=None):
+        room = self.get_object()
+        room.shared_text = request.data.get('shared_text', '')
+        room.save()
+        return Response({'status': 'text updated'})
 
 class MessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
@@ -57,16 +64,3 @@ class MessageViewSet(viewsets.ModelViewSet):
         room_code = self.kwargs['room_code']
         room = get_object_or_404(Room, code=room_code)
         serializer.save(sender=self.request.user, room=room)
-
-class DrawingViewSet(viewsets.ModelViewSet):
-    serializer_class = DrawingSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        room_code = self.kwargs['room_code']
-        return Drawing.objects.filter(room__code=room_code)
-
-    def perform_create(self, serializer):
-        room_code = self.kwargs['room_code']
-        room = get_object_or_404(Room, code=room_code)
-        serializer.save(user=self.request.user, room=room)

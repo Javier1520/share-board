@@ -1,7 +1,3 @@
-"""
-Django settings for share_board project.
-"""
-
 import os
 from pathlib import Path
 from datetime import timedelta
@@ -11,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = os.getenv('SECRET_KEY')
@@ -34,7 +30,6 @@ INSTALLED_APPS = [
     'channels',
 
     # Local apps
-    'core',
     'rooms',
 ]
 
@@ -49,7 +44,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'core.config.urls'
+ROOT_URLCONF = 'core.urls'
 
 TEMPLATES = [
     {
@@ -67,8 +62,8 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'core.config.wsgi.application'
-ASGI_APPLICATION = 'core.config.asgi.application'
+WSGI_APPLICATION = 'core.wsgi.application'
+ASGI_APPLICATION = 'core.asgi.application'
 
 # Database
 DATABASES = {

@@ -1,8 +1,6 @@
 import uuid
 from django.db import models
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
+from django.contrib.auth.models import User
 
 class Room(models.Model):
     code = models.UUIDField(default=uuid.uuid4, unique=True)
@@ -31,15 +29,3 @@ class Message(models.Model):
 
     def __str__(self):
         return f"{self.sender.username}: {self.content[:50]}"
-
-class Drawing(models.Model):
-    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='drawings')
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    data = models.JSONField()  # Store drawing data as JSON
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['created_at']
-
-    def __str__(self):
-        return f"Drawing by {self.user.username} in room {self.room.code}"
