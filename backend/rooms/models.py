@@ -4,7 +4,6 @@ from django.contrib.auth.models import User
 
 class Room(models.Model):
     code = models.UUIDField(default=uuid.uuid4, unique=True)
-    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     drawing_data = models.JSONField(default=dict)  # Store drawing data as JSON
