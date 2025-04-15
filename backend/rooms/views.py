@@ -22,6 +22,7 @@ class RoomDetailView(generics.RetrieveUpdateAPIView):
     queryset = Room.objects.all()
     serializer_class = RoomSerializer
     permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'code'
 
 class MessageCreateView(generics.CreateAPIView):
     serializer_class = MessageSerializer
