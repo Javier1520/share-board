@@ -1,308 +1,80 @@
 import json
-import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-
-logger = logging.getLogger(__name__)
+from .models import Room, Message
+from django.contrib.auth.models import User
+from rest_framework_simplejwt.tokens import UntypedToken
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.contrib.auth.models import AnonymousUser
+from urllib.parse import parse_qs
 
 class RoomConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        """Handle WebSocket connection."""
-        try:
-            from .models import Room
+        self.room_code = self.scope['url_route']['kwargs']['room_code']
+        self.room_group_name = f"room_{self.room_code}"
 
-            self.room_code = self.scope['url_route']['kwargs']['room_code']
-            self.room_group_name = f'room_{self.room_code}'
-            self.user = self.scope['user']
+        self.user = await self.get_user()
 
-            logger.info(f"User {self.user.username if self.user.is_authenticated else 'anonymous'} attempting to connect to room {self.room_code}")
+        if not self.user or self.user.is_anonymous:
+            await self.close()
+            return
 
-            # Validate authentication
-            if not self.user.is_authenticated:
-                logger.warning(f"Unauthenticated connection attempt to room {self.room_code}")
-                await self.close(code=4003)  # Custom close code for auth failure
-                return
-
-            # Verify room exists
-            room = await self.get_room()
-            if not room:
-                logger.warning(f"Attempted to connect to non-existent room {self.room_code}")
-                await self.close(code=4004)  # Custom close code for invalid room
-                return
-
-            # Join room group
-            await self.channel_layer.group_add(
-                self.room_group_name,
-                self.channel_name
-            )
-
-            await self.accept()
-            logger.info(f"User {self.user.username} successfully connected to room {self.room_code}")
-
-            # Send initial state
-            await self.send_initial_state()
-            # Notify others about the new user
-            await self.handle_user_join({})
-
-        except Exception as e:
-            logger.error(f"Error connecting to room: {str(e)}", exc_info=True)
-            await self.close(code=4002)  # Custom close code for server error
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        await self.accept()
 
     async def disconnect(self, close_code):
-        """Handle WebSocket disconnection."""
-        try:
-            logger.info(f"User {self.user.username if hasattr(self, 'user') and self.user.is_authenticated else 'anonymous'} disconnecting from room {self.room_code if hasattr(self, 'room_code') else 'unknown'}, close code: {close_code}")
-
-            if hasattr(self, 'room_group_name') and hasattr(self, 'channel_name'):
-                # Notify others about the user leaving
-                if hasattr(self, 'user') and self.user.is_authenticated:
-                    await self.handle_user_leave({})
-
-                await self.channel_layer.group_discard(
-                    self.room_group_name,
-                    self.channel_name
-                )
-        except Exception as e:
-            logger.error(f"Error during disconnect: {str(e)}", exc_info=True)
+        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
     async def receive(self, text_data):
-        """Handle incoming WebSocket messages."""
-        try:
-            data = json.loads(text_data)
-            message_type = data.get('type')
-            logger.debug(f"Received {message_type} in room {self.room_code}")
+        data = json.loads(text_data)
+        action = data.get('action')
 
-            handlers = {
-                'chat_message': self.handle_chat_message,
-                'drawing_update': self.handle_drawing_update,
-                'text_update': self.handle_text_update,
-                'user_join': self.handle_user_join,
-                'user_leave': self.handle_user_leave
-            }
-
-            if message_type in handlers:
-                await handlers[message_type](data)
-            else:
-                logger.warning(f"Unknown message type: {message_type}")
-
-        except json.JSONDecodeError:
-            logger.error("Received invalid JSON data")
-        except Exception as e:
-            logger.error(f"Error processing message: {str(e)}")
-
-    # Message handlers
-    async def handle_chat_message(self, data):
-        """Process chat messages."""
-        from .models import Message
-
-        content = data.get('content')
-        if not content:
-            return
-
-        user = self.scope['user']
-        if not user.is_authenticated:
-            return
-
-        try:
+        if action == 'message':
+            content = data.get('content')
             await self.save_message(content)
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
-                    'type': 'chat_message',
-                    'message': content,
-                    'username': user.username,
-                    'user_id': str(user.id)
+                    'type': 'chat.message',
+                    'sender': self.user.username,
+                    'content': content
                 }
             )
-        except Exception as e:
-            logger.error(f"Error handling chat: {str(e)}")
+        elif action == 'update_shared_text':
+            await self.update_shared_text(data.get('shared_text'))
+        elif action == 'update_drawing':
+            await self.update_drawing_data(data.get('drawing_data'))
 
-    async def handle_drawing_update(self, data):
-        """Process drawing updates."""
-        drawing_data = data.get('drawing_data')
-        if not drawing_data or not self.user.is_authenticated:
-            return
-
-        try:
-            await self.update_drawing(drawing_data)
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'drawing_update',
-                    'drawing_data': drawing_data,
-                    'username': self.user.username,
-                    'user_id': str(self.user.id)
-                }
-            )
-        except Exception as e:
-            logger.error(f"Error handling drawing: {str(e)}")
-
-    async def handle_text_update(self, data):
-        """Process text updates."""
-        shared_text = data.get('shared_text')
-        if shared_text is None or not self.user.is_authenticated:
-            return
-
-        try:
-            await self.update_text(shared_text)
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'text_update',
-                    'shared_text': shared_text,
-                    'username': self.user.username,
-                    'user_id': str(self.user.id)
-                }
-            )
-        except Exception as e:
-            logger.error(f"Error handling text update: {str(e)}")
-
-    async def handle_user_join(self, data):
-        """Handle user join notifications."""
-        user = self.scope['user']
-        if not user.is_authenticated:
-            return
-
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'user_join',
-                'user': {
-                    'id': str(user.id),
-                    'username': user.username
-                }
-            }
-        )
-
-    async def handle_user_leave(self, data):
-        """Handle user leave notifications."""
-        user = self.scope['user']
-        if not user.is_authenticated:
-            return
-
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'user_leave',
-                'user': {
-                    'id': str(user.id),
-                    'username': user.username
-                }
-            }
-        )
-
-    # Group message handlers
     async def chat_message(self, event):
-        """Send chat message to client."""
-        await self.send(text_data=json.dumps({
-            'type': 'message',
-            'content': event['message'],
-            'user': {
-                'id': event['user_id'],
-                'username': event['username']
-            }
-        }))
+        await self.send(text_data=json.dumps(event))
 
-    async def drawing_update(self, event):
-        """Send drawing update to client."""
-        await self.send(text_data=json.dumps({
-            'type': 'drawing_update',
-            'drawing_data': event['drawing_data'],
-            'user': {
-                'id': event['user_id'],
-                'username': event['username']
-            }
-        }))
-
-    async def text_update(self, event):
-        """Send text update to client."""
-        await self.send(text_data=json.dumps({
-            'type': 'text_update',
-            'shared_text': event['shared_text'],
-            'user': {
-                'id': event['user_id'],
-                'username': event['username']
-            }
-        }))
-
-    async def user_join(self, event):
-        """Notify client about user join."""
-        await self.send(text_data=json.dumps({
-            'type': 'user_join',
-            'user': event['user']
-        }))
-
-    async def user_leave(self, event):
-        """Notify client about user leave."""
-        await self.send(text_data=json.dumps({
-            'type': 'user_leave',
-            'user': event['user']
-        }))
-
-    # Database operations
     @database_sync_to_async
-    def get_room(self):
-        """Get room from database."""
-        from .models import Room
+    def get_user(self):
+        query_string = self.scope['query_string'].decode()
+        token = parse_qs(query_string).get('token', [None])[0]
+        if not token:
+            return AnonymousUser()
         try:
-            return Room.objects.get(code=self.room_code)
-        except Room.DoesNotExist:
-            logger.error(f"Room {self.room_code} not found")
-            return None
+            validated_token = UntypedToken(token)
+            jwt_auth = JWTAuthentication()
+            user, _ = jwt_auth.get_user(validated_token), validated_token
+            return user
+        except:
+            return AnonymousUser()
 
     @database_sync_to_async
     def save_message(self, content):
-        """Save message to database."""
-        from .models import Room, Message
         room = Room.objects.get(code=self.room_code)
-        return Message.objects.create(
-            room=room,
-            sender=self.scope['user'],
-            content=content
-        )
+        return Message.objects.create(room=room, sender=self.user, content=content)
 
     @database_sync_to_async
-    def update_drawing(self, drawing_data):
-        """Update drawing data in the database."""
-        from .models import Room
+    def update_shared_text(self, text):
         room = Room.objects.get(code=self.room_code)
-        room.drawing_data = drawing_data
-        room.save(update_fields=['drawing_data'])
-        return room
+        room.shared_text = text
+        room.save()
 
     @database_sync_to_async
-    def update_text(self, shared_text):
-        """Update shared text in the database."""
-        from .models import Room
+    def update_drawing_data(self, data):
         room = Room.objects.get(code=self.room_code)
-        room.shared_text = shared_text
-        room.save(update_fields=['shared_text'])
-        return room
-
-    @database_sync_to_async
-    def get_initial_state(self):
-        """Get initial room state from database."""
-        from .models import Room, Message
-        room = Room.objects.get(code=self.room_code)
-        messages = list(Message.objects.filter(room=room).order_by('created_at')[:50].values(
-            'content', 'sender__username', 'sender__id', 'created_at'
-        ))
-        participants = list(room.participants.values('id', 'username'))
-
-        return {
-            'messages': messages,
-            'drawing_data': room.drawing_data,
-            'shared_text': room.shared_text,
-            'participants': participants
-        }
-
-    async def send_initial_state(self):
-        """Send initial room state to client."""
-        try:
-            state = await self.get_initial_state()
-            await self.send(text_data=json.dumps({
-                'type': 'initial_state',
-                'data': state
-            }))
-        except Exception as e:
-            logger.error(f"Error sending initial state: {str(e)}")
+        room.drawing_data = data
+        room.save()
