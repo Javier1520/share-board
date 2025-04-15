@@ -4,8 +4,6 @@ from django.contrib.auth.models import User
 
 class Room(models.Model):
     code = models.UUIDField(default=uuid.uuid4, unique=True)
-    host = models.ForeignKey(User, on_delete=models.CASCADE, related_name='hosted_rooms')
-    participants = models.ManyToManyField(User, related_name='joined_rooms', blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
