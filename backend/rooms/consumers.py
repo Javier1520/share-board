@@ -1,19 +1,12 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from .models import Room, Message
-from django.contrib.auth.models import User
-from rest_framework_simplejwt.tokens import UntypedToken
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from django.contrib.auth.models import AnonymousUser
-from urllib.parse import parse_qs
 
 class RoomConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.room_code = self.scope['url_route']['kwargs']['room_code']
         self.room_group_name = f"room_{self.room_code}"
-
-        self.user = await self.get_user()
+        self.user = self.scope['user']
 
         if not self.user or self.user.is_anonymous:
             await self.close()
@@ -41,40 +34,59 @@ class RoomConsumer(AsyncWebsocketConsumer):
                 }
             )
         elif action == 'update_shared_text':
+            shared_text = data.get('shared_text')
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'shared.text',
+                    'shared_text': shared_text
+                }
+            )
+        elif action == 'save_shared_text':
             await self.update_shared_text(data.get('shared_text'))
         elif action == 'update_drawing':
+            drawing_data = data.get('drawing_data')
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'drawing.update',
+                    'drawing_data': drawing_data
+                }
+            )
+        elif action == 'save_drawing':
             await self.update_drawing_data(data.get('drawing_data'))
 
     async def chat_message(self, event):
         await self.send(text_data=json.dumps(event))
 
-    @database_sync_to_async
-    def get_user(self):
-        query_string = self.scope['query_string'].decode()
-        token = parse_qs(query_string).get('token', [None])[0]
-        if not token:
-            return AnonymousUser()
-        try:
-            validated_token = UntypedToken(token)
-            jwt_auth = JWTAuthentication()
-            user, _ = jwt_auth.get_user(validated_token), validated_token
-            return user
-        except:
-            return AnonymousUser()
+    async def shared_text(self, event):
+        await self.send(text_data=json.dumps({
+            'action': 'update_shared_text',
+            'shared_text': event['shared_text']
+        }))
+
+    async def drawing_update(self, event):
+        await self.send(text_data=json.dumps({
+            'action': 'update_drawing',
+            'drawing_data': event['drawing_data']
+        }))
 
     @database_sync_to_async
     def save_message(self, content):
+        from .models import Room, Message
         room = Room.objects.get(code=self.room_code)
         return Message.objects.create(room=room, sender=self.user, content=content)
 
     @database_sync_to_async
     def update_shared_text(self, text):
+        from .models import Room
         room = Room.objects.get(code=self.room_code)
         room.shared_text = text
         room.save()
 
     @database_sync_to_async
     def update_drawing_data(self, data):
+        from .models import Room
         room = Room.objects.get(code=self.room_code)
         room.drawing_data = data
         room.save()
