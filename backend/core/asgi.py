@@ -15,5 +15,18 @@ from channels.auth import AuthMiddlewareStack
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
-    "websocket": URLRouter(websocket_urlpatterns),
+    "websocket":
+        AuthMiddlewareStack(
+            URLRouter(websocket_urlpatterns)
+        )
+    ,
 })
+# in prod add in allowed host the frontend domain
+# application = ProtocolTypeRouter({
+#     "http": django_asgi_app,
+#     "websocket": AllowedHostsOriginValidator(
+#         AuthMiddlewareStack(
+#             URLRouter(websocket_urlpatterns)
+#         )
+#     ),
+# })
