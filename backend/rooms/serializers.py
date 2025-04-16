@@ -1,4 +1,5 @@
-from datetime import timedelta, timezone
+from datetime import timedelta
+from django.utils import timezone
 from rest_framework import serializers
 from .models import Room, Message, WebSocketTicket
 from django.contrib.auth.models import User

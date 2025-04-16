@@ -1,16 +1,32 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
+from asgiref.sync import sync_to_async
 
 class RoomConsumer(AsyncWebsocketConsumer):
     async def connect(self):
+        from .models import WebSocketTicket
         self.room_code = self.scope['url_route']['kwargs']['room_code']
         self.room_group_name = f"room_{self.room_code}"
-        self.user = self.scope['user']
 
-        if not self.user or self.user.is_anonymous:
-            await self.close()
+        # Parse token from query string
+        query_params = self.scope["query_string"].decode()
+        try:
+            token_str = dict(qc.split("=") for qc in query_params.split("&")).get("token")
+        except Exception:
+            await self.close(code=4002)  # Bad query format
             return
+
+        if not token_str:
+            await self.close(code=4003)  # No token
+            return
+
+        ticket = await database_sync_to_async(WebSocketTicket.objects.filter(token=token_str).first)()
+        if not ticket or not await database_sync_to_async(ticket.is_valid)():
+            await self.close(code=4001)  # Invalid or expired
+            return
+
+        await database_sync_to_async(ticket.delete)()
 
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()

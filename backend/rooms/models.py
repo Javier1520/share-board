@@ -14,7 +14,7 @@ class Room(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Room {self.code} hosted by {self.host.username}"
+        return f"Room {self.code}"
 
 class Message(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='messages')
