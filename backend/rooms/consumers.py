@@ -25,7 +25,7 @@ class RoomConsumer(AsyncWebsocketConsumer):
             await self.close(code=4001)
             return
 
-        self.user = ticket.user  # <--- Set the authenticated user here
+        self.user = await database_sync_to_async(lambda: ticket.user)()
 
         await database_sync_to_async(ticket.delete)()
 
