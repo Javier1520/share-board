@@ -9,22 +9,23 @@ class RoomConsumer(AsyncWebsocketConsumer):
         self.room_code = self.scope['url_route']['kwargs']['room_code']
         self.room_group_name = f"room_{self.room_code}"
 
-        # Parse token from query string
         query_params = self.scope["query_string"].decode()
         try:
             token_str = dict(qc.split("=") for qc in query_params.split("&")).get("token")
         except Exception:
-            await self.close(code=4002)  # Bad query format
+            await self.close(code=4002)
             return
 
         if not token_str:
-            await self.close(code=4003)  # No token
+            await self.close(code=4003)
             return
 
         ticket = await database_sync_to_async(WebSocketTicket.objects.filter(token=token_str).first)()
         if not ticket or not await database_sync_to_async(ticket.is_valid)():
-            await self.close(code=4001)  # Invalid or expired
+            await self.close(code=4001)
             return
+
+        self.user = ticket.user  # <--- Set the authenticated user here
 
         await database_sync_to_async(ticket.delete)()
 
