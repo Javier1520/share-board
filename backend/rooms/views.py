@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-from .models import Room, Message
-from .serializers import RoomSerializer, MessageSerializer, UserRegistrationSerializer
+from .models import Room, Message, WebSocketTicket
+from .serializers import RoomSerializer, MessageSerializer, UserRegistrationSerializer, WebSocketTicketSerializer
 
 class UserRegistrationView(generics.CreateAPIView):
     serializer_class = UserRegistrationSerializer
@@ -30,3 +30,8 @@ class MessageCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(sender=self.request.user)
+
+class CreateWebSocketTicketView(generics.CreateAPIView):
+    serializer_class = WebSocketTicketSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = WebSocketTicket.objects.all()

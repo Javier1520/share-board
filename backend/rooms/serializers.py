@@ -1,5 +1,6 @@
+from datetime import timedelta, timezone
 from rest_framework import serializers
-from .models import Room, Message
+from .models import Room, Message, WebSocketTicket
 from django.contrib.auth.models import User
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -30,3 +31,16 @@ class RoomSerializer(serializers.ModelSerializer):
     class Meta:
         model = Room
         fields = ['id', 'code', 'created_at', 'updated_at', 'drawing_data', 'shared_text', 'messages']
+
+class WebSocketTicketSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WebSocketTicket
+        fields = ['token']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        ticket = WebSocketTicket.objects.create(
+            user=user,
+            expires_at=timezone.now() + timedelta(minutes=60)
+        )
+        return ticket
