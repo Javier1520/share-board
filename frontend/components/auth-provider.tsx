@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { useAuth } from '@/lib/hooks/useAuth';
-import { useRouter, usePathname } from 'next/navigation';
+import { useEffect } from "react";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { useRouter, usePathname } from "next/navigation";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { checkAuth } = useAuth();
@@ -12,10 +12,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initAuth = async () => {
       const isAuthenticated = await checkAuth();
-      const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register');
-      
+      const isAuthPage =
+        pathname.startsWith("/login") || pathname.startsWith("/register");
+
       // Handle redirect after successful auth check
-      if (!isAuthenticated && !isAuthPage && pathname !== '/') {
+      if (!isAuthenticated && !isAuthPage && pathname !== "/") {
         const redirectPath = encodeURIComponent(pathname);
         router.push(`/login?redirect=${redirectPath}`);
       }

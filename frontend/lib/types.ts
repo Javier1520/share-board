@@ -61,15 +61,20 @@ export interface CreateMessageRequest {
 }
 
 export interface WebSocketMessage {
-  action: 'message' | 'update_shared_text' | 'save_shared_text' | 'update_drawing' | 'save_drawing';
+  action:
+    | "message"
+    | "update_shared_text"
+    | "save_shared_text"
+    | "update_drawing"
+    | "save_drawing";
   content?: string;
   shared_text?: string;
   drawing_data?: string;
 }
 
 export interface WebSocketResponse {
-  type: 'chat.message';
-  action?: 'update_shared_text' | 'update_drawing';
+  type: "chat.message";
+  action?: "update_shared_text" | "update_drawing";
   sender?: User;
   content?: string;
   shared_text?: string;

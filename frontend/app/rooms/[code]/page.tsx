@@ -24,7 +24,16 @@ export default function RoomPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sharedText, setSharedText] = useState("");
   const { currentRoom, drawingColor, isErasing, user } = useAppStore();
-  const { socket, connect, disconnect, isConnecting, connectionError, sendMessage, updateSharedText, updateDrawing } = useWebSocket();
+  const {
+    socket,
+    connect,
+    disconnect,
+    isConnecting,
+    connectionError,
+    sendMessage,
+    updateSharedText,
+    updateDrawing,
+  } = useWebSocket();
   const [ctx, setCtx] = useState<CanvasRenderingContext2D | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [lastX, setLastX] = useState(0);
@@ -118,39 +127,48 @@ export default function RoomPage() {
       const handleWebSocketMessage = (event: MessageEvent) => {
         try {
           const response = JSON.parse(event.data) as WebSocketResponse;
-          
+
           switch (response.type) {
-            case 'chat.message':
+            case "chat.message":
               if (response.content && response.sender) {
-                setMessages(prev => [...prev, {
-                  content: response.content,
-                  sender: response.sender
-                }]);
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    content: response.content,
+                    sender: response.sender,
+                  },
+                ]);
               }
               break;
             default:
-              if (response.action === 'update_shared_text' && response.shared_text) {
+              if (
+                response.action === "update_shared_text" &&
+                response.shared_text
+              ) {
                 setSharedText(response.shared_text);
-              } else if (response.action === 'update_drawing' && response.drawing_data) {
+              } else if (
+                response.action === "update_drawing" &&
+                response.drawing_data
+              ) {
                 loadDrawing(response.drawing_data);
               }
           }
         } catch (error) {
-          console.error('Failed to parse WebSocket message:', error);
+          console.error("Failed to parse WebSocket message:", error);
         }
       };
 
       const handleError = (event: Event) => {
-        console.error('WebSocket error:', event);
-        toast.error('Connection error occurred');
+        console.error("WebSocket error:", event);
+        toast.error("Connection error occurred");
       };
 
-      socket.addEventListener('message', handleWebSocketMessage);
-      socket.addEventListener('error', handleError);
+      socket.addEventListener("message", handleWebSocketMessage);
+      socket.addEventListener("error", handleError);
 
       return () => {
-        socket.removeEventListener('message', handleWebSocketMessage);
-        socket.removeEventListener('error', handleError);
+        socket.removeEventListener("message", handleWebSocketMessage);
+        socket.removeEventListener("error", handleError);
       };
     }
   }, [socket, loadDrawing]);
@@ -428,7 +446,7 @@ export default function RoomPage() {
         </Button>
       </div>
 
-      <WebSocketStatus 
+      <WebSocketStatus
         socket={socket}
         isConnecting={isConnecting}
         connectionError={connectionError}

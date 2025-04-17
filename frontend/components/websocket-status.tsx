@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 interface WebSocketStatusProps {
   socket: WebSocket | null;
@@ -8,7 +8,11 @@ interface WebSocketStatusProps {
   connectionError: string | null;
 }
 
-export function WebSocketStatus({ socket, isConnecting, connectionError }: WebSocketStatusProps) {
+export function WebSocketStatus({
+  socket,
+  isConnecting,
+  connectionError,
+}: WebSocketStatusProps) {
   const [reconnectCount, setReconnectCount] = useState(0);
   const [isReconnecting, setIsReconnecting] = useState(false);
 
@@ -18,21 +22,21 @@ export function WebSocketStatus({ socket, isConnecting, connectionError }: WebSo
     const handleConnectionStateChange = () => {
       if (socket.readyState === WebSocket.CONNECTING) {
         setIsReconnecting(true);
-        setReconnectCount(prev => prev + 1);
+        setReconnectCount((prev) => prev + 1);
       } else if (socket.readyState === WebSocket.OPEN) {
         setIsReconnecting(false);
         setReconnectCount(0);
       }
     };
 
-    socket.addEventListener('connecting', handleConnectionStateChange);
-    socket.addEventListener('open', handleConnectionStateChange);
-    socket.addEventListener('close', () => setIsReconnecting(false));
+    socket.addEventListener("connecting", handleConnectionStateChange);
+    socket.addEventListener("open", handleConnectionStateChange);
+    socket.addEventListener("close", () => setIsReconnecting(false));
 
     return () => {
-      socket.removeEventListener('connecting', handleConnectionStateChange);
-      socket.removeEventListener('open', handleConnectionStateChange);
-      socket.removeEventListener('close', () => setIsReconnecting(false));
+      socket.removeEventListener("connecting", handleConnectionStateChange);
+      socket.removeEventListener("open", handleConnectionStateChange);
+      socket.removeEventListener("close", () => setIsReconnecting(false));
     };
   }, [socket]);
 
