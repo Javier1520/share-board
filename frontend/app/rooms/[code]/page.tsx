@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, ChangeEvent, useCallback } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  ChangeEvent,
+  useCallback,
+  memo,
+} from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +21,71 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { WebSocketStatus } from "@/components/websocket-status";
 import dynamic from "next/dynamic";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+
+// Dynamically import the Excalidraw wrapper with SSR disabled
+const ExcalidrawWrapper = dynamic(
+  () => import("@/components/ui/excalidraw-wrapper"),
+  {
+    ssr: false,
+    loading: () => <div className="w-full h-full bg-gray-800 rounded-lg"></div>,
+  }
+);
+
+const ExcalidrawSection = memo(
+  ({
+    excalidrawRef,
+    isSaving,
+    handleSaveCanvas,
+  }: {
+    excalidrawRef: React.MutableRefObject<ExcalidrawImperativeAPI | null>;
+    isSaving: boolean;
+    handleSaveCanvas: () => void;
+  }) => {
+    return (
+      <div className="flex-1 bg-gray-800 rounded-lg p-4 flex flex-col">
+        <div className="flex justify-between mb-2">
+          <h3 className="text-lg font-bold mb-2">Excalidraw</h3>
+          <Button
+            onClick={handleSaveCanvas}
+            className="bg-green-600"
+            disabled={isSaving}
+          >
+            {isSaving ? "Saving..." : "Save Draw"}
+          </Button>
+        </div>
+        <div className="flex-1 relative mb-2">
+          <div className="absolute inset-0 m-4">
+            <ExcalidrawWrapper
+              ref={excalidrawRef}
+              initialData={{
+                appState: {
+                  viewBackgroundColor: "transparent",
+                  theme: "dark",
+                  viewModeEnabled: false,
+                },
+              }}
+              UIOptions={{
+                canvasActions: {
+                  clearCanvas: true,
+                  loadScene: true,
+                },
+                tools: {
+                  image: false,
+                },
+                dockedSidebarBreakpoint: 10000,
+              }}
+              viewModeEnabled={false}
+              zenModeEnabled={true}
+              gridModeEnabled={false}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+);
+
+ExcalidrawSection.displayName = "ExcalidrawSection";
 
 export default function RoomPage() {
   const { code } = useParams();
@@ -147,15 +219,12 @@ export default function RoomPage() {
     }
   };
 
-  // Save Excalidraw drawing as JSON
   const handleSaveCanvas = async () => {
     if (!excalidrawRef.current) return;
     setIsSaving(true);
     try {
       const api = excalidrawRef.current;
-      const scene = api.getSceneElements
-        ? api.getSceneElements()
-        : api.getScene();
+      const scene = api.getSceneElements ? api.getSceneElements() : [];
       const appState = api.getAppState ? api.getAppState() : undefined;
       const files = api.getFiles ? api.getFiles() : undefined;
       const drawingData = JSON.stringify({ elements: scene, appState, files });
@@ -206,64 +275,16 @@ export default function RoomPage() {
     );
   }
 
-  // Dynamically import the Excalidraw wrapper with SSR disabled
-  const ExcalidrawWrapper = dynamic(
-    () => import("@/components/ui/excalidraw-wrapper"),
-    {
-      ssr: false,
-      loading: () => (
-        <div className="w-full h-full bg-gray-800 rounded-lg"></div>
-      ),
-    }
-  );
-
   return (
     <>
       <div className="min-h-screen bg-gray-900 text-white p-4">
         <div className="h-screen flex flex-col md:flex-row gap-4">
           <div className="flex-1 flex flex-col gap-4">
-            {/* Canvas Section */}
-            <div className="flex-1 bg-gray-800 rounded-lg p-4 flex flex-col">
-              <div className="flex justify-between mb-2">
-                <h3 className="text-lg font-bold mb-2">Excalidraw</h3>
-
-                <Button
-                  onClick={handleSaveCanvas}
-                  className="bg-green-600"
-                  disabled={isSaving}
-                >
-                  {isSaving ? "Saving..." : "Save Draw"}
-                </Button>
-              </div>
-              <div className="flex-1 relative mb-2">
-                <div className="absolute inset-0 m-4">
-                  <ExcalidrawWrapper
-                    ref={excalidrawRef}
-                    initialData={{
-                      appState: {
-                        viewBackgroundColor: "transparent",
-                        theme: "dark",
-                        viewModeEnabled: false,
-                      },
-                    }}
-                    UIOptions={{
-                      canvasActions: {
-                        clearCanvas: true,
-                        loadScene: true,
-                      },
-                      defaultSidebarDockedPreference: false,
-                      tools: {
-                        image: false,
-                      },
-                      dockedSidebarBreakpoint: 10000,
-                    }}
-                    viewModeEnabled={false}
-                    zenModeEnabled={true}
-                    gridModeEnabled={false}
-                  />
-                </div>
-              </div>
-            </div>
+            <ExcalidrawSection
+              excalidrawRef={excalidrawRef}
+              isSaving={isSaving}
+              handleSaveCanvas={handleSaveCanvas}
+            />
 
             {/* Shared Text Section */}
             <div className="h-1/3 bg-gray-800 rounded-lg p-4">

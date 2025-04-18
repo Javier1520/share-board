@@ -1,15 +1,14 @@
-// First, create a wrapper component in a separate file, e.g., ExcalidrawWrapper.jsx
 "use client";
 
 import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import { ExcalidrawProps } from "@excalidraw/excalidraw/types";
-import { JSX } from "react";
+import { forwardRef } from "react";
 
-const ExcalidrawWrapper = (
-  props: JSX.IntrinsicAttributes & ExcalidrawProps
-) => {
-  return <Excalidraw {...props} />;
-};
+const ExcalidrawWrapper = forwardRef<any, ExcalidrawProps>((props, ref) => {
+  return <Excalidraw ref={ref} {...props} />;
+});
+
+ExcalidrawWrapper.displayName = "ExcalidrawWrapper";
 
 export default ExcalidrawWrapper;
