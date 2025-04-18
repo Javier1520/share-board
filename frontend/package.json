@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.0",
     "@radix-ui/react-dialog": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.0",
     "@types/js-cookie": "^3.0.6",

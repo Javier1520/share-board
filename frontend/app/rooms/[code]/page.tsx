@@ -12,10 +12,7 @@ import { toast } from "sonner";
 import api from "@/lib/services/api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { WebSocketStatus } from "@/components/websocket-status";
-
-interface DrawingData {
-  drawing_data: string;
-}
+import dynamic from "next/dynamic";
 
 export default function RoomPage() {
   const { code } = useParams();
@@ -36,15 +33,17 @@ export default function RoomPage() {
   } = useWebSocket();
   const [ctx, setCtx] = useState<CanvasRenderingContext2D | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [lastX, setLastX] = useState(0);
-  const [lastY, setLastY] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [isClearCanvasDialogOpen, setIsClearCanvasDialogOpen] = useState(false);
+  const [isPenMode, setIsPenMode] = useState(false);
   const router = useRouter();
+
+  // Store the last position for drawing
+  const lastPosition = useRef({ x: 0, y: 0 });
 
   const loadDrawing = useCallback(
     (drawingData: string) => {
@@ -84,6 +83,28 @@ export default function RoomPage() {
     }
   }, [code, loadDrawing, router]);
 
+  const resizeCanvas = useCallback(() => {
+    if (canvasRef.current && ctx) {
+      const canvas = canvasRef.current;
+
+      // Store the current canvas content
+      const tempCanvas = document.createElement("canvas");
+      const tempCtx = tempCanvas.getContext("2d");
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      if (tempCtx) {
+        tempCtx.drawImage(canvas, 0, 0);
+      }
+
+      // Resize the canvas to match its display size
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+
+      // Restore the content
+      ctx.drawImage(tempCanvas, 0, 0);
+    }
+  }, [ctx]);
+
   useEffect(() => {
     if (!currentRoom) {
       fetchRoom();
@@ -99,28 +120,19 @@ export default function RoomPage() {
   useEffect(() => {
     if (canvasRef.current) {
       const canvas = canvasRef.current;
+      // Set the canvas dimensions to match its display size
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+
       const context = canvas.getContext("2d");
       if (context) {
         setCtx(context);
-        // Set initial canvas size
-        resizeCanvas();
         // Add resize listener
         window.addEventListener("resize", resizeCanvas);
         return () => window.removeEventListener("resize", resizeCanvas);
       }
     }
-  }, []);
-
-  const resizeCanvas = () => {
-    if (canvasRef.current) {
-      const canvas = canvasRef.current;
-      const parent = canvas.parentElement;
-      if (parent) {
-        canvas.width = parent.clientWidth;
-        canvas.height = parent.clientHeight;
-      }
-    }
-  };
+  }, [resizeCanvas]);
 
   useEffect(() => {
     if (socket) {
@@ -198,67 +210,102 @@ export default function RoomPage() {
       updateSharedText(sharedText, true); // true for save
       toast.success("Text saved successfully");
       setHasUnsavedChanges(false);
-    } catch (error) {
+    } catch {
       toast.error("Failed to save text");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const startDrawing = (
-    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
-  ) => {
-    setIsDrawing(true);
-    const { x, y } = getCanvasCoordinates(e);
-    setLastX(x);
-    setLastY(y);
-  };
+  // ===== IMPROVED DRAWING FUNCTIONS =====
 
-  const handleDraw = (
-    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
-  ) => {
-    if (!isDrawing || !ctx || !canvasRef.current) return;
-
-    const { x, y } = getCanvasCoordinates(e);
-
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(x, y);
-    ctx.strokeStyle = isErasing ? "#000000" : drawingColor;
-    ctx.lineWidth = isErasing ? 20 : 2;
-    ctx.lineCap = "round";
-    ctx.stroke();
-
-    setLastX(x);
-    setLastY(y);
-    setHasUnsavedChanges(true);
-
-    updateDrawing(canvasRef.current.toDataURL());
-  };
-
-  const stopDrawing = () => {
-    setIsDrawing(false);
-  };
-
+  // Function to get coordinates relative to canvas
   const getCanvasCoordinates = (
     e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
   ) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
 
-    if ("touches" in e) {
-      const touch = e.touches[0];
-      const rect = canvas.getBoundingClientRect();
+    const rect = canvas.getBoundingClientRect();
+
+    if ("touches" in e && e.touches.length > 0) {
       return {
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top,
+        x: ((e.touches[0].clientX - rect.left) / rect.width) * canvas.width,
+        y: ((e.touches[0].clientY - rect.top) / rect.height) * canvas.height,
       };
-    } else {
-      const rect = canvas.getBoundingClientRect();
+    } else if ("clientX" in e) {
       return {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
+        x: ((e.clientX - rect.left) / rect.width) * canvas.width,
+        y: ((e.clientY - rect.top) / rect.height) * canvas.height,
       };
+    }
+
+    return { x: 0, y: 0 };
+  };
+
+  // Start drawing
+  const startDrawing = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+  ) => {
+    e.preventDefault();
+
+    // Only draw if pen mode or eraser is active
+    if (!isPenMode && !isErasing) return;
+
+    const { x, y } = getCanvasCoordinates(e);
+
+    if (ctx) {
+      setIsDrawing(true);
+      ctx.beginPath();
+      ctx.lineWidth = isErasing ? 20 : 5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = isErasing ? "#ffffff" : drawingColor;
+      ctx.moveTo(x, y);
+      lastPosition.current = { x, y };
+    }
+  };
+
+  // Continue drawing
+  const draw = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+  ) => {
+    if (!isDrawing || !ctx || !canvasRef.current) return;
+    e.preventDefault();
+
+    const { x, y } = getCanvasCoordinates(e);
+
+    ctx.beginPath();
+    ctx.moveTo(lastPosition.current.x, lastPosition.current.y);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+
+    // Update last position
+    lastPosition.current = { x, y };
+
+    // Mark that we have unsaved changes
+    setHasUnsavedChanges(true);
+  };
+
+  // Dynamically import the Excalidraw wrapper with SSR disabled
+  const ExcalidrawWrapper = dynamic(
+    () => import("@/components/ui/excalidraw-wrapper"),
+    {
+      ssr: false,
+      loading: () => (
+        <div className="w-full h-full bg-gray-800 rounded-lg"></div>
+      ),
+    }
+  );
+
+  // Stop drawing
+  const stopDrawing = () => {
+    if (isDrawing && canvasRef.current) {
+      setIsDrawing(false);
+      ctx?.beginPath(); // Reset the path
+
+      // Send the updated canvas to other users
+      updateDrawing(canvasRef.current.toDataURL());
     }
   };
 
@@ -267,6 +314,7 @@ export default function RoomPage() {
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       updateDrawing(canvasRef.current.toDataURL());
       setHasUnsavedChanges(true);
+      setIsClearCanvasDialogOpen(false);
     }
   };
 
@@ -277,7 +325,7 @@ export default function RoomPage() {
       updateDrawing(canvasRef.current.toDataURL(), true); // true for save
       toast.success("Canvas saved successfully");
       setHasUnsavedChanges(false);
-    } catch (error) {
+    } catch {
       toast.error("Failed to save canvas");
     } finally {
       setIsSaving(false);
@@ -327,49 +375,36 @@ export default function RoomPage() {
         <div className="h-screen flex flex-col md:flex-row gap-4">
           <div className="flex-1 flex flex-col gap-4">
             {/* Canvas Section */}
-            <div className="flex-1 bg-gray-800 rounded-lg p-4">
-              <div className="mb-4 flex flex-wrap gap-2">
-                <input
-                  type="color"
-                  value={drawingColor}
-                  onChange={(e) =>
-                    useAppStore.getState().setDrawingColor(e.target.value)
-                  }
-                  className="w-8 h-8"
+            <div className="flex-1 bg-gray-800 rounded-lg p-4 relative">
+              <div className="absolute inset-0 m-4">
+                <ExcalidrawWrapper
+                  initialData={{
+                    appState: {
+                      viewBackgroundColor: "#1f2937",
+                      theme: "dark",
+
+                      viewModeEnabled: false,
+                    },
+                  }}
+                  UIOptions={{
+                    canvasActions: {
+                      clearCanvas: true,
+                      saveAsScene: true,
+                      loadScene: true,
+                    },
+                    theme: "dark",
+                    defaultSidebarDockedPreference: false,
+                    tools: {
+                      image: false,
+                    },
+                    dockedSidebarBreakpoint: 10000,
+                  }}
+                  renderTopRightUI={null}
+                  viewModeEnabled={false}
+                  zenModeEnabled={true}
+                  gridModeEnabled={false}
                 />
-                <Button
-                  onClick={() =>
-                    useAppStore.getState().setIsErasing(!isErasing)
-                  }
-                  className={`${isErasing ? "bg-red-600" : "bg-gray-600"}`}
-                >
-                  {isErasing ? "Eraser On" : "Eraser Off"}
-                </Button>
-                <Button
-                  onClick={() => setIsClearCanvasDialogOpen(true)}
-                  className="bg-gray-600"
-                >
-                  Clear
-                </Button>
-                <Button
-                  onClick={handleSaveCanvas}
-                  className="bg-green-600"
-                  disabled={isSaving}
-                >
-                  {isSaving ? "Saving..." : "Save Canvas"}
-                </Button>
               </div>
-              <canvas
-                ref={canvasRef}
-                className="w-full h-[calc(100%-48px)] bg-white rounded touch-none"
-                onMouseDown={startDrawing}
-                onMouseMove={handleDraw}
-                onMouseUp={stopDrawing}
-                onMouseOut={stopDrawing}
-                onTouchStart={startDrawing}
-                onTouchMove={handleDraw}
-                onTouchEnd={stopDrawing}
-              />
             </div>
 
             {/* Shared Text Section */}
