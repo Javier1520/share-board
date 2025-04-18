@@ -13,14 +13,14 @@ import api from "@/lib/services/api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { WebSocketStatus } from "@/components/websocket-status";
 import dynamic from "next/dynamic";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 export default function RoomPage() {
   const { code } = useParams();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [chatMessage, setChatMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [sharedText, setSharedText] = useState("");
-  const { currentRoom, drawingColor, isErasing, user } = useAppStore();
+  const { currentRoom, user } = useAppStore();
   const {
     socket,
     connect,
@@ -31,38 +31,15 @@ export default function RoomPage() {
     updateSharedText,
     updateDrawing,
   } = useWebSocket();
-  const [ctx, setCtx] = useState<CanvasRenderingContext2D | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
-  const [isClearCanvasDialogOpen, setIsClearCanvasDialogOpen] = useState(false);
-  const [isPenMode, setIsPenMode] = useState(false);
   const router = useRouter();
 
-  // Store the last position for drawing
-  const lastPosition = useRef({ x: 0, y: 0 });
-
-  const loadDrawing = useCallback(
-    (drawingData: string) => {
-      if (ctx && canvasRef.current) {
-        const img = new Image();
-        img.onload = () => {
-          ctx.clearRect(
-            0,
-            0,
-            canvasRef.current!.width,
-            canvasRef.current!.height
-          );
-          ctx.drawImage(img, 0, 0);
-        };
-        img.src = drawingData;
-      }
-    },
-    [ctx]
-  );
+  // Excalidraw API ref
+  const excalidrawRef = useRef<ExcalidrawImperativeAPI | null>(null);
 
   const fetchRoom = useCallback(async () => {
     try {
@@ -71,9 +48,6 @@ export default function RoomPage() {
       useAppStore.getState().setCurrentRoom(room);
       setMessages(room.messages);
       setSharedText(room.shared_text);
-      if (room.drawing_data) {
-        loadDrawing(room.drawing_data);
-      }
     } catch (error) {
       toast.error("Failed to load room");
       console.error("Failed to fetch room:", error);
@@ -81,29 +55,7 @@ export default function RoomPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [code, loadDrawing, router]);
-
-  const resizeCanvas = useCallback(() => {
-    if (canvasRef.current && ctx) {
-      const canvas = canvasRef.current;
-
-      // Store the current canvas content
-      const tempCanvas = document.createElement("canvas");
-      const tempCtx = tempCanvas.getContext("2d");
-      tempCanvas.width = canvas.width;
-      tempCanvas.height = canvas.height;
-      if (tempCtx) {
-        tempCtx.drawImage(canvas, 0, 0);
-      }
-
-      // Resize the canvas to match its display size
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-
-      // Restore the content
-      ctx.drawImage(tempCanvas, 0, 0);
-    }
-  }, [ctx]);
+  }, [code, router]);
 
   useEffect(() => {
     if (!currentRoom) {
@@ -116,23 +68,6 @@ export default function RoomPage() {
       disconnect();
     };
   }, [code, currentRoom, disconnect, fetchRoom, connect]);
-
-  useEffect(() => {
-    if (canvasRef.current) {
-      const canvas = canvasRef.current;
-      // Set the canvas dimensions to match its display size
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-
-      const context = canvas.getContext("2d");
-      if (context) {
-        setCtx(context);
-        // Add resize listener
-        window.addEventListener("resize", resizeCanvas);
-        return () => window.removeEventListener("resize", resizeCanvas);
-      }
-    }
-  }, [resizeCanvas]);
 
   useEffect(() => {
     if (socket) {
@@ -158,11 +93,6 @@ export default function RoomPage() {
                 response.shared_text
               ) {
                 setSharedText(response.shared_text);
-              } else if (
-                response.action === "update_drawing" &&
-                response.drawing_data
-              ) {
-                loadDrawing(response.drawing_data);
               }
           }
         } catch (error) {
@@ -183,7 +113,7 @@ export default function RoomPage() {
         socket.removeEventListener("error", handleError);
       };
     }
-  }, [socket, loadDrawing]);
+  }, [socket]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -217,116 +147,23 @@ export default function RoomPage() {
     }
   };
 
-  // ===== IMPROVED DRAWING FUNCTIONS =====
-
-  // Function to get coordinates relative to canvas
-  const getCanvasCoordinates = (
-    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
-  ) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-
-    const rect = canvas.getBoundingClientRect();
-
-    if ("touches" in e && e.touches.length > 0) {
-      return {
-        x: ((e.touches[0].clientX - rect.left) / rect.width) * canvas.width,
-        y: ((e.touches[0].clientY - rect.top) / rect.height) * canvas.height,
-      };
-    } else if ("clientX" in e) {
-      return {
-        x: ((e.clientX - rect.left) / rect.width) * canvas.width,
-        y: ((e.clientY - rect.top) / rect.height) * canvas.height,
-      };
-    }
-
-    return { x: 0, y: 0 };
-  };
-
-  // Start drawing
-  const startDrawing = (
-    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
-  ) => {
-    e.preventDefault();
-
-    // Only draw if pen mode or eraser is active
-    if (!isPenMode && !isErasing) return;
-
-    const { x, y } = getCanvasCoordinates(e);
-
-    if (ctx) {
-      setIsDrawing(true);
-      ctx.beginPath();
-      ctx.lineWidth = isErasing ? 20 : 5;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = isErasing ? "#ffffff" : drawingColor;
-      ctx.moveTo(x, y);
-      lastPosition.current = { x, y };
-    }
-  };
-
-  // Continue drawing
-  const draw = (
-    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
-  ) => {
-    if (!isDrawing || !ctx || !canvasRef.current) return;
-    e.preventDefault();
-
-    const { x, y } = getCanvasCoordinates(e);
-
-    ctx.beginPath();
-    ctx.moveTo(lastPosition.current.x, lastPosition.current.y);
-    ctx.lineTo(x, y);
-    ctx.stroke();
-
-    // Update last position
-    lastPosition.current = { x, y };
-
-    // Mark that we have unsaved changes
-    setHasUnsavedChanges(true);
-  };
-
-  // Dynamically import the Excalidraw wrapper with SSR disabled
-  const ExcalidrawWrapper = dynamic(
-    () => import("@/components/ui/excalidraw-wrapper"),
-    {
-      ssr: false,
-      loading: () => (
-        <div className="w-full h-full bg-gray-800 rounded-lg"></div>
-      ),
-    }
-  );
-
-  // Stop drawing
-  const stopDrawing = () => {
-    if (isDrawing && canvasRef.current) {
-      setIsDrawing(false);
-      ctx?.beginPath(); // Reset the path
-
-      // Send the updated canvas to other users
-      updateDrawing(canvasRef.current.toDataURL());
-    }
-  };
-
-  const handleClearCanvas = () => {
-    if (ctx && canvasRef.current) {
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      updateDrawing(canvasRef.current.toDataURL());
-      setHasUnsavedChanges(true);
-      setIsClearCanvasDialogOpen(false);
-    }
-  };
-
+  // Save Excalidraw drawing as JSON
   const handleSaveCanvas = async () => {
-    if (!canvasRef.current) return;
+    if (!excalidrawRef.current) return;
     setIsSaving(true);
     try {
-      updateDrawing(canvasRef.current.toDataURL(), true); // true for save
-      toast.success("Canvas saved successfully");
+      const api = excalidrawRef.current;
+      const scene = api.getSceneElements
+        ? api.getSceneElements()
+        : api.getScene();
+      const appState = api.getAppState ? api.getAppState() : undefined;
+      const files = api.getFiles ? api.getFiles() : undefined;
+      const drawingData = JSON.stringify({ elements: scene, appState, files });
+      updateDrawing(drawingData, true); // true for save
+      toast.success("Draw saved successfully");
       setHasUnsavedChanges(false);
     } catch {
-      toast.error("Failed to save canvas");
+      toast.error("Failed to save draw");
     } finally {
       setIsSaving(false);
     }
@@ -369,40 +206,62 @@ export default function RoomPage() {
     );
   }
 
+  // Dynamically import the Excalidraw wrapper with SSR disabled
+  const ExcalidrawWrapper = dynamic(
+    () => import("@/components/ui/excalidraw-wrapper"),
+    {
+      ssr: false,
+      loading: () => (
+        <div className="w-full h-full bg-gray-800 rounded-lg"></div>
+      ),
+    }
+  );
+
   return (
     <>
       <div className="min-h-screen bg-gray-900 text-white p-4">
         <div className="h-screen flex flex-col md:flex-row gap-4">
           <div className="flex-1 flex flex-col gap-4">
             {/* Canvas Section */}
-            <div className="flex-1 bg-gray-800 rounded-lg p-4 relative">
-              <div className="absolute inset-0 m-4">
-                <ExcalidrawWrapper
-                  initialData={{
-                    appState: {
-                      viewBackgroundColor: "transparent",
-                      theme: "dark",
+            <div className="flex-1 bg-gray-800 rounded-lg p-4 flex flex-col">
+              <div className="flex justify-between mb-2">
+                <h3 className="text-lg font-bold mb-2">Excalidraw</h3>
 
-                      viewModeEnabled: false,
-                    },
-                  }}
-                  UIOptions={{
-                    canvasActions: {
-                      clearCanvas: true,
-                      loadScene: true,
-                    },
-                    theme: "dark",
-                    defaultSidebarDockedPreference: false,
-                    tools: {
-                      image: false,
-                    },
-                    dockedSidebarBreakpoint: 10000,
-                  }}
-                  renderTopRightUI={null}
-                  viewModeEnabled={false}
-                  zenModeEnabled={true}
-                  gridModeEnabled={false}
-                />
+                <Button
+                  onClick={handleSaveCanvas}
+                  className="bg-green-600"
+                  disabled={isSaving}
+                >
+                  {isSaving ? "Saving..." : "Save Draw"}
+                </Button>
+              </div>
+              <div className="flex-1 relative mb-2">
+                <div className="absolute inset-0 m-4">
+                  <ExcalidrawWrapper
+                    ref={excalidrawRef}
+                    initialData={{
+                      appState: {
+                        viewBackgroundColor: "transparent",
+                        theme: "dark",
+                        viewModeEnabled: false,
+                      },
+                    }}
+                    UIOptions={{
+                      canvasActions: {
+                        clearCanvas: true,
+                        loadScene: true,
+                      },
+                      defaultSidebarDockedPreference: false,
+                      tools: {
+                        image: false,
+                      },
+                      dockedSidebarBreakpoint: 10000,
+                    }}
+                    viewModeEnabled={false}
+                    zenModeEnabled={true}
+                    gridModeEnabled={false}
+                  />
+                </div>
               </div>
             </div>
 
@@ -501,17 +360,6 @@ export default function RoomPage() {
         description="You have unsaved changes. Are you sure you want to leave this room? All unsaved changes will be lost."
         confirmText="Leave"
         cancelText="Stay"
-        variant="destructive"
-      />
-
-      <ConfirmDialog
-        isOpen={isClearCanvasDialogOpen}
-        onClose={() => setIsClearCanvasDialogOpen(false)}
-        onConfirm={handleClearCanvas}
-        title="Clear Canvas"
-        description="Are you sure you want to clear the canvas? This action cannot be undone."
-        confirmText="Clear"
-        cancelText="Cancel"
         variant="destructive"
       />
     </>
