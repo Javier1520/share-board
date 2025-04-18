@@ -380,7 +380,7 @@ export default function RoomPage() {
                 <ExcalidrawWrapper
                   initialData={{
                     appState: {
-                      viewBackgroundColor: "#1f2937",
+                      viewBackgroundColor: "transparent",
                       theme: "dark",
 
                       viewModeEnabled: false,
@@ -389,7 +389,6 @@ export default function RoomPage() {
                   UIOptions={{
                     canvasActions: {
                       clearCanvas: true,
-                      saveAsScene: true,
                       loadScene: true,
                     },
                     theme: "dark",
