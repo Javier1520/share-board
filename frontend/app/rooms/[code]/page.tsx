@@ -27,7 +27,11 @@ const ExcalidrawWrapper = dynamic(
   () => import("@/components/ui/excalidraw-wrapper"),
   {
     ssr: false,
-    loading: () => <div className="w-full h-full bg-gray-800 rounded-lg"></div>,
+    loading: () => (
+      <div className="w-full h-full bg-gray-800 rounded-lg">
+        Loading Excalidraw...
+      </div>
+    ),
   }
 );
 
@@ -36,17 +40,29 @@ const ExcalidrawSection = memo(
     excalidrawRef,
     isSaving,
     handleSaveCanvas,
+    onChange,
+    initialDrawingData, // Add prop for initial drawing data
   }: {
     excalidrawRef: React.MutableRefObject<ExcalidrawImperativeAPI | null>;
     isSaving: boolean;
     handleSaveCanvas: () => void;
+    onChange?: (elements: readonly any[], appState: any, files: any) => void;
+    initialDrawingData?: {
+      elements: readonly any[];
+      appState: any;
+      files: any;
+    }; // Type for initial data
   }) => {
+    console.log("ExcalidrawSection rendered", { isSaving, initialDrawingData }); // Debug log
     return (
       <div className="flex-1 bg-gray-800 rounded-lg p-4 flex flex-col">
         <div className="flex justify-between mb-2">
           <h3 className="text-lg font-bold mb-2">Excalidraw</h3>
           <Button
-            onClick={handleSaveCanvas}
+            onClick={() => {
+              console.log("Save Draw button clicked, calling handleSaveCanvas"); // Debug log
+              handleSaveCanvas();
+            }}
             className="bg-green-600"
             disabled={isSaving}
           >
@@ -57,12 +73,23 @@ const ExcalidrawSection = memo(
           <div className="absolute inset-0 m-4">
             <ExcalidrawWrapper
               ref={excalidrawRef}
+              onChange={(elements, appState, files) => {
+                console.log("Excalidraw onChange triggered", {
+                  elementsLength: elements.length,
+                  appState,
+                  files,
+                }); // Debug log
+                onChange?.(elements, appState, files);
+              }}
               initialData={{
+                elements: initialDrawingData?.elements || [],
                 appState: {
                   viewBackgroundColor: "transparent",
                   theme: "dark",
                   viewModeEnabled: false,
+                  ...(initialDrawingData?.appState || {}),
                 },
+                files: initialDrawingData?.files || {},
               }}
               UIOptions={{
                 canvasActions: {
@@ -92,7 +119,12 @@ export default function RoomPage() {
   const [chatMessage, setChatMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [sharedText, setSharedText] = useState("");
-  const { currentRoom, user } = useAppStore();
+  const [drawingData, setDrawingData] = useState<{
+    elements: readonly any[];
+    appState: any;
+    files: any;
+  } | null>(null); // State for drawing data
+  const { currentRoom, user, setCurrentRoom } = useAppStore();
   const {
     socket,
     connect,
@@ -112,34 +144,39 @@ export default function RoomPage() {
 
   // Excalidraw API ref
   const excalidrawRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  // Ref to store drawing data
+  const drawingDataRef = useRef<{
+    elements: readonly any[];
+    appState: any;
+    files: any;
+  } | null>(null);
 
   const fetchRoom = useCallback(async () => {
     try {
       const response = await api.get(`/api/rooms/${code}`);
       const room = response.data;
-      useAppStore.getState().setCurrentRoom(room);
-      setMessages(room.messages);
-      setSharedText(room.shared_text);
+      setCurrentRoom(room);
+      setMessages(room.messages || []);
+      setSharedText(room.shared_text || "");
+      setDrawingData(room.drawing ? JSON.parse(room.drawing) : null);
     } catch (error) {
-      toast.error("Failed to load room");
       console.error("Failed to fetch room:", error);
+      toast.error("Failed to load room");
       router.push("/rooms");
     } finally {
       setIsLoading(false);
     }
-  }, [code, router]);
+  }, [code, router, setCurrentRoom]);
 
   useEffect(() => {
-    if (!currentRoom) {
-      fetchRoom();
-    } else {
-      setIsLoading(false);
-    }
+    console.log("Initial useEffect, currentRoom:", currentRoom); // Debug log
+    // Always fetch room data on mount to avoid stale state
+    fetchRoom();
     connect(code as string);
     return () => {
       disconnect();
     };
-  }, [code, currentRoom, disconnect, fetchRoom, connect]);
+  }, [code, fetchRoom, connect, disconnect]); // Removed currentRoom dependency
 
   useEffect(() => {
     if (socket) {
@@ -165,6 +202,16 @@ export default function RoomPage() {
                 response.shared_text
               ) {
                 setSharedText(response.shared_text);
+              }
+              // Handle drawing updates via WebSocket if supported
+              if (response.action === "update_drawing" && response.drawing) {
+                try {
+                  const parsedDrawing = JSON.parse(response.drawing);
+                  setDrawingData(parsedDrawing);
+                  console.log("WebSocket drawing update:", parsedDrawing); // Debug log
+                } catch (error) {
+                  console.error("Failed to parse WebSocket drawing:", error);
+                }
               }
           }
         } catch (error) {
@@ -207,12 +254,14 @@ export default function RoomPage() {
   };
 
   const handleSaveSharedText = async () => {
+    console.log("Saving shared text:", sharedText);
     setIsSaving(true);
     try {
-      updateSharedText(sharedText, true); // true for save
+      await updateSharedText(sharedText, true);
       toast.success("Text saved successfully");
       setHasUnsavedChanges(false);
-    } catch {
+    } catch (error) {
+      console.error("Failed to save text:", error);
       toast.error("Failed to save text");
     } finally {
       setIsSaving(false);
@@ -220,22 +269,51 @@ export default function RoomPage() {
   };
 
   const handleSaveCanvas = async () => {
-    if (!excalidrawRef.current) return;
+    console.log("handleSaveCanvas called");
+    console.log("excalidrawRef.current:", excalidrawRef.current);
+    console.log("drawingDataRef.current:", drawingDataRef.current);
     setIsSaving(true);
     try {
-      const api = excalidrawRef.current;
-      const scene = api.getSceneElements ? api.getSceneElements() : [];
-      const appState = api.getAppState ? api.getAppState() : undefined;
-      const files = api.getFiles ? api.getFiles() : undefined;
-      const drawingData = JSON.stringify({ elements: scene, appState, files });
-      updateDrawing(drawingData, true); // true for save
+      let drawingData;
+      if (drawingDataRef.current) {
+        drawingData = JSON.stringify(drawingDataRef.current);
+        console.log("Using drawingDataRef for save:", drawingData);
+      } else if (excalidrawRef.current) {
+        const elements = excalidrawRef.current.getSceneElements
+          ? excalidrawRef.current.getSceneElements()
+          : [];
+        const appState = excalidrawRef.current.getAppState
+          ? excalidrawRef.current.getAppState()
+          : {};
+        const files = excalidrawRef.current.getFiles
+          ? excalidrawRef.current.getFiles()
+          : {};
+        drawingData = JSON.stringify({ elements, appState, files });
+        console.log("Using fallback data from excalidrawRef:", drawingData);
+      } else {
+        throw new Error("No drawing data available");
+      }
+      await updateDrawing(drawingData, true);
       toast.success("Draw saved successfully");
       setHasUnsavedChanges(false);
-    } catch {
+    } catch (error) {
+      console.error("Failed to save draw:", error);
       toast.error("Failed to save draw");
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleExcalidrawChange = (
+    elements: readonly any[],
+    appState: any,
+    files: any
+  ) => {
+    console.log("handleExcalidrawChange called", {
+      elementsLength: elements.length,
+    });
+    drawingDataRef.current = { elements, appState, files };
+    setHasUnsavedChanges(true);
   };
 
   const handleChatMessageChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -257,6 +335,12 @@ export default function RoomPage() {
     } else {
       action();
     }
+  };
+
+  // Assume reload button calls this
+  const handleReload = () => {
+    console.log("Reload button clicked");
+    fetchRoom();
   };
 
   if (isLoading) {
@@ -284,6 +368,8 @@ export default function RoomPage() {
               excalidrawRef={excalidrawRef}
               isSaving={isSaving}
               handleSaveCanvas={handleSaveCanvas}
+              onChange={handleExcalidrawChange}
+              initialDrawingData={drawingData} // Pass drawing data
             />
 
             {/* Shared Text Section */}
@@ -357,6 +443,13 @@ export default function RoomPage() {
           className="absolute top-4 right-4 bg-gray-700 hover:bg-gray-600"
         >
           Leave Room
+        </Button>
+        {/* Reload Button (for testing, adjust as needed) */}
+        <Button
+          onClick={handleReload}
+          className="absolute top-4 right-20 bg-blue-600 hover:bg-blue-500"
+        >
+          Reload
         </Button>
       </div>
 
