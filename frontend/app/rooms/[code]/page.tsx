@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  ChangeEvent,
-  useCallback,
-  memo,
-} from "react";
+import { useEffect, useState, ChangeEvent, useCallback, memo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,7 +13,18 @@ import api from "@/lib/services/api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { WebSocketStatus } from "@/components/websocket-status";
 import dynamic from "next/dynamic";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import {
+  ExcalidrawImperativeAPI,
+  AppState,
+  BinaryFiles,
+} from "@excalidraw/excalidraw/types";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface DrawingData {
+  elements: readonly any[];
+  appState: Partial<AppState>;
+  files: BinaryFiles;
+}
 
 // Dynamically import the Excalidraw wrapper with SSR disabled
 const ExcalidrawWrapper = dynamic(
@@ -35,36 +39,30 @@ const ExcalidrawWrapper = dynamic(
   }
 );
 
+interface ExcalidrawSectionProps {
+  onExcalidrawAPIReady: (api: ExcalidrawImperativeAPI) => void;
+  isExcalidrawReady: boolean;
+  isSaving: boolean;
+  handleSaveCanvas: () => void;
+  initialDrawingData?: DrawingData;
+}
+
 const ExcalidrawSection = memo(
   ({
-    excalidrawRef,
+    onExcalidrawAPIReady,
+    isExcalidrawReady,
     isSaving,
     handleSaveCanvas,
-    onChange,
-    initialDrawingData, // Add prop for initial drawing data
-  }: {
-    excalidrawRef: React.MutableRefObject<ExcalidrawImperativeAPI | null>;
-    isSaving: boolean;
-    handleSaveCanvas: () => void;
-    onChange?: (elements: readonly any[], appState: any, files: any) => void;
-    initialDrawingData?: {
-      elements: readonly any[];
-      appState: any;
-      files: any;
-    }; // Type for initial data
-  }) => {
-    console.log("ExcalidrawSection rendered", { isSaving, initialDrawingData }); // Debug log
+    initialDrawingData,
+  }: ExcalidrawSectionProps) => {
     return (
       <div className="flex-1 bg-gray-800 rounded-lg p-4 flex flex-col">
         <div className="flex justify-between mb-2">
           <h3 className="text-lg font-bold mb-2">Excalidraw</h3>
           <Button
-            onClick={() => {
-              console.log("Save Draw button clicked, calling handleSaveCanvas"); // Debug log
-              handleSaveCanvas();
-            }}
+            onClick={handleSaveCanvas}
             className="bg-green-600"
-            disabled={isSaving}
+            disabled={!isExcalidrawReady || isSaving}
           >
             {isSaving ? "Saving..." : "Save Draw"}
           </Button>
@@ -72,15 +70,7 @@ const ExcalidrawSection = memo(
         <div className="flex-1 relative mb-2">
           <div className="absolute inset-0 m-4">
             <ExcalidrawWrapper
-              ref={excalidrawRef}
-              onChange={(elements, appState, files) => {
-                console.log("Excalidraw onChange triggered", {
-                  elementsLength: elements.length,
-                  appState,
-                  files,
-                }); // Debug log
-                onChange?.(elements, appState, files);
-              }}
+              excalidrawAPI={onExcalidrawAPIReady}
               initialData={{
                 elements: initialDrawingData?.elements || [],
                 appState: {
@@ -119,11 +109,7 @@ export default function RoomPage() {
   const [chatMessage, setChatMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [sharedText, setSharedText] = useState("");
-  const [drawingData, setDrawingData] = useState<{
-    elements: readonly any[];
-    appState: any;
-    files: any;
-  } | null>(null); // State for drawing data
+  const [drawingData, setDrawingData] = useState<DrawingData | null>(null);
   const { currentRoom, user, setCurrentRoom } = useAppStore();
   const {
     socket,
@@ -142,14 +128,10 @@ export default function RoomPage() {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const router = useRouter();
 
-  // Excalidraw API ref
-  const excalidrawRef = useRef<ExcalidrawImperativeAPI | null>(null);
-  // Ref to store drawing data
-  const drawingDataRef = useRef<{
-    elements: readonly any[];
-    appState: any;
-    files: any;
-  } | null>(null);
+  // Excalidraw API state
+  const [excalidrawAPI, setExcalidrawAPI] =
+    useState<ExcalidrawImperativeAPI | null>(null);
+  const isExcalidrawReady = !!excalidrawAPI;
 
   const fetchRoom = useCallback(async () => {
     try {
@@ -169,14 +151,13 @@ export default function RoomPage() {
   }, [code, router, setCurrentRoom]);
 
   useEffect(() => {
-    console.log("Initial useEffect, currentRoom:", currentRoom); // Debug log
-    // Always fetch room data on mount to avoid stale state
+    console.log("Initial useEffect, currentRoom:", currentRoom);
     fetchRoom();
     connect(code as string);
     return () => {
       disconnect();
     };
-  }, [code, fetchRoom, connect, disconnect]); // Removed currentRoom dependency
+  }, [code, fetchRoom, connect, disconnect]);
 
   useEffect(() => {
     if (socket) {
@@ -203,12 +184,16 @@ export default function RoomPage() {
               ) {
                 setSharedText(response.shared_text);
               }
-              // Handle drawing updates via WebSocket if supported
-              if (response.action === "update_drawing" && response.drawing) {
+              if (
+                response.action === "update_drawing" &&
+                response.drawing_data
+              ) {
                 try {
-                  const parsedDrawing = JSON.parse(response.drawing);
+                  const parsedDrawing = JSON.parse(
+                    response.drawing_data
+                  ) as DrawingData;
                   setDrawingData(parsedDrawing);
-                  console.log("WebSocket drawing update:", parsedDrawing); // Debug log
+                  console.log("WebSocket drawing update:", parsedDrawing);
                 } catch (error) {
                   console.error("Failed to parse WebSocket drawing:", error);
                 }
@@ -269,30 +254,17 @@ export default function RoomPage() {
   };
 
   const handleSaveCanvas = async () => {
-    console.log("handleSaveCanvas called");
-    console.log("excalidrawRef.current:", excalidrawRef.current);
-    console.log("drawingDataRef.current:", drawingDataRef.current);
+    if (!excalidrawAPI) {
+      toast.error("Excalidraw is not ready yet. Please try again later.");
+      return;
+    }
     setIsSaving(true);
     try {
-      let drawingData;
-      if (drawingDataRef.current) {
-        drawingData = JSON.stringify(drawingDataRef.current);
-        console.log("Using drawingDataRef for save:", drawingData);
-      } else if (excalidrawRef.current) {
-        const elements = excalidrawRef.current.getSceneElements
-          ? excalidrawRef.current.getSceneElements()
-          : [];
-        const appState = excalidrawRef.current.getAppState
-          ? excalidrawRef.current.getAppState()
-          : {};
-        const files = excalidrawRef.current.getFiles
-          ? excalidrawRef.current.getFiles()
-          : {};
-        drawingData = JSON.stringify({ elements, appState, files });
-        console.log("Using fallback data from excalidrawRef:", drawingData);
-      } else {
-        throw new Error("No drawing data available");
-      }
+      const elements = excalidrawAPI.getSceneElements();
+      const appState = excalidrawAPI.getAppState();
+      const files = excalidrawAPI.getFiles();
+      const drawingData = JSON.stringify({ elements, appState, files });
+
       await updateDrawing(drawingData, true);
       toast.success("Draw saved successfully");
       setHasUnsavedChanges(false);
@@ -302,18 +274,6 @@ export default function RoomPage() {
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleExcalidrawChange = (
-    elements: readonly any[],
-    appState: any,
-    files: any
-  ) => {
-    console.log("handleExcalidrawChange called", {
-      elementsLength: elements.length,
-    });
-    drawingDataRef.current = { elements, appState, files };
-    setHasUnsavedChanges(true);
   };
 
   const handleChatMessageChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -337,7 +297,6 @@ export default function RoomPage() {
     }
   };
 
-  // Assume reload button calls this
   const handleReload = () => {
     console.log("Reload button clicked");
     fetchRoom();
@@ -365,14 +324,13 @@ export default function RoomPage() {
         <div className="h-screen flex flex-col md:flex-row gap-4">
           <div className="flex-1 flex flex-col gap-4">
             <ExcalidrawSection
-              excalidrawRef={excalidrawRef}
+              onExcalidrawAPIReady={(api) => setExcalidrawAPI(api)}
+              isExcalidrawReady={isExcalidrawReady}
               isSaving={isSaving}
               handleSaveCanvas={handleSaveCanvas}
-              onChange={handleExcalidrawChange}
-              initialDrawingData={drawingData} // Pass drawing data
+              initialDrawingData={drawingData ?? undefined}
             />
 
-            {/* Shared Text Section */}
             <div className="h-1/3 bg-gray-800 rounded-lg p-4">
               <div className="flex justify-between mb-2">
                 <h3 className="text-lg font-bold">Shared Text</h3>
@@ -393,8 +351,21 @@ export default function RoomPage() {
             </div>
           </div>
 
-          {/* Chat Section */}
           <div className="w-full md:w-80 bg-gray-800 rounded-lg p-4 flex flex-col">
+            <div className="flex justify-between mb-2">
+              <Button
+                onClick={handleReload}
+                className="bg-blue-600 hover:bg-blue-500"
+              >
+                Reload
+              </Button>
+              <Button
+                onClick={() => handleNavigate(() => router.push("/rooms"))}
+                className="bg-red-700 hover:bg-gray-600"
+              >
+                Leave Room
+              </Button>
+            </div>
             {connectionError ? (
               <div className="text-red-400 text-center mb-4">
                 {connectionError}
@@ -438,19 +409,6 @@ export default function RoomPage() {
             </form>
           </div>
         </div>
-        <Button
-          onClick={() => handleNavigate(() => router.push("/rooms"))}
-          className="absolute top-4 right-4 bg-gray-700 hover:bg-gray-600"
-        >
-          Leave Room
-        </Button>
-        {/* Reload Button (for testing, adjust as needed) */}
-        <Button
-          onClick={handleReload}
-          className="absolute top-4 right-20 bg-blue-600 hover:bg-blue-500"
-        >
-          Reload
-        </Button>
       </div>
 
       <WebSocketStatus
