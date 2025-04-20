@@ -9,6 +9,7 @@ import { useAppStore } from "@/lib/store";
 import { Room } from "@/lib/types";
 import { toast } from "sonner";
 import { Spinner } from "@/components/ui/spinner";
+import { useAuth } from "@/lib/hooks/useAuth";
 import api from "@/lib/services/api";
 
 export default function RoomList() {
@@ -19,6 +20,7 @@ export default function RoomList() {
   const [joiningRoomCode, setJoiningRoomCode] = useState<string | null>(null);
   const router = useRouter();
   const { setCurrentRoom } = useAppStore();
+  const { logout } = useAuth();
 
   useEffect(() => {
     fetchRooms();
@@ -92,9 +94,16 @@ export default function RoomList() {
               <Button onClick={joinRoom} disabled={isJoining}>
                 {isJoining ? "Joining..." : "Join Room"}
               </Button>
+              <Button onClick={createRoom} disabled={isLoading}>
+                {isLoading ? "Creating..." : "Create Room"}
+              </Button>
             </div>
-            <Button onClick={createRoom} disabled={isLoading}>
-              {isLoading ? "Creating..." : "Create Room"}
+            <Button
+              onClick={logout}
+              disabled={isLoading || isJoining}
+              variant={"destructive"}
+            >
+              Logout
             </Button>
           </div>
         </div>
