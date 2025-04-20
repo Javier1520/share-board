@@ -16,6 +16,7 @@ export default function RoomList() {
   const [roomCode, setRoomCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [joiningRoomCode, setJoiningRoomCode] = useState<string | null>(null);
   const router = useRouter();
   const { setCurrentRoom } = useAppStore();
 
@@ -115,21 +116,31 @@ export default function RoomList() {
             {rooms.map((room) => (
               <Card
                 key={room.code}
-                className="p-4 bg-gray-800 text-white hover:bg-gray-700 cursor-pointer transition-colors"
-                onClick={() => {
-                  setIsJoining(true);
-                  setCurrentRoom(room);
-                  router.push(`/rooms/${room.code}`);
-                }}
+                className={`p-4 bg-gray-800 text-white relative ${
+                  joiningRoomCode
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:bg-gray-700 cursor-pointer"
+                } transition-colors`}
+                onClick={
+                  joiningRoomCode
+                    ? undefined
+                    : () => {
+                        setJoiningRoomCode(room.code);
+                        setCurrentRoom(room);
+                        router.push(`/rooms/${room.code}`);
+                      }
+                }
               >
-                <h3 className="font-bold mb-2">
-                  Room #{room.id} <Spinner show={isJoining} size="small" />
-                </h3>
-
+                <h3 className="font-bold mb-2">Room #{room.id}</h3>
                 <p className="text-sm text-gray-400">Code: {room.code}</p>
                 <p className="text-sm text-gray-400">
                   Created: {new Date(room.created_at).toLocaleDateString()}
                 </p>
+                {joiningRoomCode === room.code && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50">
+                    <Spinner size="small" />
+                  </div>
+                )}
               </Card>
             ))}
           </div>
