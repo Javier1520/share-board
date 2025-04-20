@@ -89,19 +89,11 @@ export default function RoomList() {
                 className="bg-gray-800 text-white border-gray-700"
                 disabled={isJoining}
               />
-              <Button
-                onClick={joinRoom}
-                className="bg-purple-600 hover:bg-purple-700"
-                disabled={isJoining}
-              >
+              <Button onClick={joinRoom} disabled={isJoining}>
                 {isJoining ? "Joining..." : "Join Room"}
               </Button>
             </div>
-            <Button
-              onClick={createRoom}
-              className="bg-green-600 hover:bg-green-700 w-full md:w-auto"
-              disabled={isLoading}
-            >
+            <Button onClick={createRoom} disabled={isLoading}>
               {isLoading ? "Creating..." : "Create Room"}
             </Button>
           </div>
@@ -138,7 +130,7 @@ export default function RoomList() {
                 </p>
                 {joiningRoomCode === room.code && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50">
-                    <Spinner size="small" />
+                    <Spinner size="small" className="text-white" />
                   </div>
                 )}
               </Card>

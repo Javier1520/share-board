@@ -60,7 +60,7 @@ export default function LoginPage() {
           </div>
           <Button
             type="submit"
-            className="w-full bg-purple-600 hover:bg-purple-700"
+            className="w-full hover:opacity-80"
             disabled={isLoading}
           >
             {isLoading ? "Logging in..." : "Login"}
@@ -68,10 +68,7 @@ export default function LoginPage() {
         </form>
         <p className="text-center text-gray-400">
           Don&apos;t have an account?{" "}
-          <Link
-            href="/register"
-            className="text-purple-400 hover:text-purple-300"
-          >
+          <Link href="/register" className="text-primary hover:text-primary/80">
             Register
           </Link>
         </p>

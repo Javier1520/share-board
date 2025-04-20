@@ -61,7 +61,6 @@ const ExcalidrawSection = memo(
           <h3 className="text-lg font-bold mb-2">Excalidraw</h3>
           <Button
             onClick={handleSaveCanvas}
-            className="bg-green-600"
             disabled={!isExcalidrawReady || isSaving}
           >
             {isSaving ? "Saving..." : "Save Draw"}
@@ -334,11 +333,7 @@ export default function RoomPage() {
             <div className="h-1/3 bg-gray-800 rounded-lg p-4">
               <div className="flex justify-between mb-2">
                 <h3 className="text-lg font-bold">Shared Text</h3>
-                <Button
-                  onClick={handleSaveSharedText}
-                  className="bg-green-600"
-                  disabled={isSaving}
-                >
+                <Button onClick={handleSaveSharedText} disabled={isSaving}>
                   {isSaving ? "Saving..." : "Save Text"}
                 </Button>
               </div>
@@ -353,15 +348,10 @@ export default function RoomPage() {
 
           <div className="w-full md:w-80 bg-gray-800 rounded-lg p-4 flex flex-col">
             <div className="flex justify-between mb-2">
-              <Button
-                onClick={handleReload}
-                className="bg-blue-600 hover:bg-blue-500"
-              >
-                Reload
-              </Button>
+              <Button onClick={handleReload}>Reload</Button>
               <Button
                 onClick={() => handleNavigate(() => router.push("/rooms"))}
-                className="bg-red-700 hover:bg-gray-600"
+                variant={"destructive"}
               >
                 Leave Room
               </Button>
@@ -403,9 +393,7 @@ export default function RoomPage() {
                 placeholder="Type a message..."
                 className="flex-1 bg-gray-700"
               />
-              <Button type="submit" className="bg-purple-600">
-                Send
-              </Button>
+              <Button type="submit">Send</Button>
             </form>
           </div>
         </div>
