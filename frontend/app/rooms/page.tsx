@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useAppStore } from "@/lib/store";
 import { Room } from "@/lib/types";
 import { toast } from "sonner";
+import { Spinner } from "@/components/ui/spinner";
 import api from "@/lib/services/api";
 
 export default function RoomList() {
@@ -116,11 +117,15 @@ export default function RoomList() {
                 key={room.code}
                 className="p-4 bg-gray-800 text-white hover:bg-gray-700 cursor-pointer transition-colors"
                 onClick={() => {
+                  setIsJoining(true);
                   setCurrentRoom(room);
                   router.push(`/rooms/${room.code}`);
                 }}
               >
-                <h3 className="font-bold mb-2">Room #{room.id}</h3>
+                <h3 className="font-bold mb-2">
+                  Room #{room.id} <Spinner show={isJoining} size="small" />
+                </h3>
+
                 <p className="text-sm text-gray-400">Code: {room.code}</p>
                 <p className="text-sm text-gray-400">
                   Created: {new Date(room.created_at).toLocaleDateString()}
