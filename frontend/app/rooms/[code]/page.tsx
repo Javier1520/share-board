@@ -340,11 +340,6 @@ export default function RoomPage() {
     }
   };
 
-  const handleReload = () => {
-    console.log("Reload button clicked");
-    fetchRoom();
-  };
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
@@ -391,8 +386,7 @@ export default function RoomPage() {
           </div>
 
           <div className="w-full md:w-80 bg-gray-800 rounded-lg p-4 flex flex-col">
-            <div className="flex justify-between mb-2">
-              <Button onClick={handleReload}>Reload</Button>
+            <div className="flex justify-end mb-2">
               <Button
                 onClick={() => handleNavigate(() => router.push("/rooms"))}
                 variant={"destructive"}
@@ -422,7 +416,7 @@ export default function RoomPage() {
                   <div
                     className={`max-w-[80%] p-2 rounded-lg break-words ${
                       message.sender.username === user?.username
-                        ? "bg-purple-600"
+                        ? "bg-primary"
                         : "bg-gray-700"
                     }`}
                   >

@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { WebSocketMessage, WebSocketTicket } from "@/lib/types";
-import { getCookie } from "@/lib/utils";
 import api from "./api";
 import { config } from "@/lib/config";
 
@@ -11,12 +10,12 @@ export const useWebSocket = () => {
   const connectingRef = useRef(false);
   const currentRoomRef = useRef<string | null>(null);
 
-  const getWebSocketTicket = async (roomCode: string) => {
+  const getWebSocketTicket = async () => {
     try {
       const response = await api.post<WebSocketTicket>("/api/ws-ticket");
       return response.data.token;
     } catch (error) {
-      throw new Error("Failed to get WebSocket ticket");
+      throw new Error(`Failed to get WebSocket ticket: ${String(error)}`);
     }
   };
 
@@ -46,7 +45,7 @@ export const useWebSocket = () => {
           setSocket(null);
         }
 
-        const ticket = await getWebSocketTicket(roomCode);
+        const ticket = await getWebSocketTicket();
         const wsUrl = `${config.wsUrl}/ws/room/${roomCode}?token=${ticket}`;
 
         const ws = new WebSocket(wsUrl);
@@ -73,7 +72,7 @@ export const useWebSocket = () => {
           currentRoomRef.current = null;
         });
       } catch (error) {
-        setConnectionError("Failed to connect");
+        setConnectionError(`Failed to connect: ${String(error)}`);
         setIsConnecting(false);
         connectingRef.current = false;
         currentRoomRef.current = null;
