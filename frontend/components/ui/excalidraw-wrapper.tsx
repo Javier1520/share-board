@@ -1,24 +1,25 @@
 "use client";
 
 import { Excalidraw } from "@excalidraw/excalidraw";
+import { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import "@excalidraw/excalidraw/index.css";
 import {
   ExcalidrawProps,
-  ExcalidrawImperativeAPI,
+  AppState,
+  BinaryFiles,
 } from "@excalidraw/excalidraw/types";
-import { forwardRef } from "react";
 
-// Extend ExcalidrawProps to explicitly include onChange
 interface ExcalidrawWrapperProps extends ExcalidrawProps {
-  onChange?: (elements: readonly any[], appState: any, files: any) => void;
+  onChange?: (
+    elements: readonly ExcalidrawElement[],
+    appState: AppState,
+    files: BinaryFiles
+  ) => void;
 }
 
-const ExcalidrawWrapper = forwardRef<
-  ExcalidrawImperativeAPI,
-  ExcalidrawWrapperProps
->((props, ref) => {
-  return <Excalidraw ref={ref} {...props} />;
-});
+const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = (props) => {
+  return <Excalidraw {...props} />;
+};
 
 ExcalidrawWrapper.displayName = "ExcalidrawWrapper";
 

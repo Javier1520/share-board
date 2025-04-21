@@ -18,10 +18,10 @@ import {
   AppState,
   BinaryFiles,
 } from "@excalidraw/excalidraw/types";
+import { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface DrawingData {
-  elements: readonly any[];
+  elements: readonly ExcalidrawElement[];
   appState: Partial<AppState>;
   files: BinaryFiles;
 }
@@ -77,6 +77,7 @@ const ExcalidrawSection = memo(
                   theme: "dark",
                   viewModeEnabled: false,
                   ...(initialDrawingData?.appState || {}),
+                  collaborators: new Map(),
                 },
                 files: initialDrawingData?.files || {},
               }}
@@ -139,7 +140,7 @@ export default function RoomPage() {
       setCurrentRoom(room);
       setMessages(room.messages || []);
       setSharedText(room.shared_text || "");
-      setDrawingData(room.drawing ? JSON.parse(room.drawing) : null);
+      setDrawingData(room.drawing_data ? JSON.parse(room.drawing_data) : null);
     } catch (error) {
       console.error("Failed to fetch room:", error);
       toast.error("Failed to load room");
