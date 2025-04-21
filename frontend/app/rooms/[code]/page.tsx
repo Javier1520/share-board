@@ -22,7 +22,7 @@ import { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 
 interface DrawingData {
   elements: readonly ExcalidrawElement[];
-  appState: Partial<AppState>;
+  appState: Pick<AppState, keyof AppState>;
   files: BinaryFiles;
 }
 
@@ -193,6 +193,15 @@ export default function RoomPage() {
                     response.drawing_data
                   ) as DrawingData;
                   setDrawingData(parsedDrawing);
+                  excalidrawAPI?.updateScene({
+                    elements: parsedDrawing.elements,
+                    appState: {
+                      ...excalidrawAPI.getAppState(), // Keep current app state
+                      ...parsedDrawing.appState, // Apply updates
+                    },
+                    collaborators: new Map(),
+                  });
+
                   console.log("WebSocket drawing update:", parsedDrawing);
                 } catch (error) {
                   console.error("Failed to parse WebSocket drawing:", error);
@@ -217,7 +226,7 @@ export default function RoomPage() {
         socket.removeEventListener("error", handleError);
       };
     }
-  }, [socket]);
+  }, [socket, excalidrawAPI]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -266,6 +275,12 @@ export default function RoomPage() {
       const drawingData = JSON.stringify({ elements, appState, files });
 
       await updateDrawing(drawingData, true);
+      await updateDrawing(drawingData);
+      // excalidrawAPI.updateScene({
+      //   elements: JSON.parse(drawingData).elements,
+      //   appState: JSON.parse(drawingData).appState,
+      // });
+      // setDrawingData(JSON.parse(drawingData));
       toast.success("Draw saved successfully");
       setHasUnsavedChanges(false);
     } catch (error) {
