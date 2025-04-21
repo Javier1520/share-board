@@ -309,11 +309,6 @@ export default function RoomPage() {
 
       await updateDrawing(drawingData, true);
       await updateDrawing(drawingData);
-      // excalidrawAPI.updateScene({
-      //   elements: JSON.parse(drawingData).elements,
-      //   appState: JSON.parse(drawingData).appState,
-      // });
-      // setDrawingData(JSON.parse(drawingData));
       toast.success("Draw saved successfully");
       setHasUnsavedChanges(false);
     } catch (error) {
@@ -389,7 +384,7 @@ export default function RoomPage() {
               <Textarea
                 value={sharedText}
                 onChange={handleSharedTextChange}
-                className="w-full h-[calc(100%-40px)] bg-gray-700 text-white resize-none"
+                className="w-full h-[calc(100%-40px)] bg-gray-700 text-white break-all"
                 placeholder="Type something..."
               />
             </div>
@@ -425,7 +420,7 @@ export default function RoomPage() {
                   }`}
                 >
                   <div
-                    className={`max-w-[80%] p-2 rounded-lg ${
+                    className={`max-w-[80%] p-2 rounded-lg break-words ${
                       message.sender.username === user?.username
                         ? "bg-purple-600"
                         : "bg-gray-700"
