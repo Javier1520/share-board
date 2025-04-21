@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useAppStore } from "@/lib/store";
 import { useWebSocket } from "@/lib/services/websocket";
-import { Message, WebSocketResponse } from "@/lib/types";
+import { Message, User, WebSocketResponse } from "@/lib/types";
 import { toast } from "sonner";
 import api from "@/lib/services/api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -151,7 +151,7 @@ export default function RoomPage() {
   }, [code, router, setCurrentRoom]);
 
   useEffect(() => {
-    console.log("Initial useEffect, currentRoom:", currentRoom);
+    console.log("Initial useEffect, currentRoom");
     fetchRoom();
     connect(code as string);
     return () => {
@@ -168,12 +168,16 @@ export default function RoomPage() {
           switch (response.type) {
             case "chat.message":
               if (response.content && response.sender) {
+                const sender: User =
+                  typeof response.sender === "string"
+                    ? { username: response.sender }
+                    : response.sender;
                 setMessages((prev) => [
                   ...prev,
                   {
                     content: response.content,
-                    sender: response.sender,
-                  },
+                    sender: sender,
+                  } as Message,
                 ]);
               }
               break;
