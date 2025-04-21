@@ -169,7 +169,13 @@ export default function RoomPage() {
       setCurrentRoom(room);
       setMessages(room.messages || []);
       setSharedText(room.shared_text || "");
-      setDrawingData(room.drawing_data ? JSON.parse(room.drawing_data) : null);
+      setDrawingData(
+        room.drawing_data
+          ? typeof room.drawing_data === "string"
+            ? JSON.parse(room.drawing_data)
+            : room.drawing_data
+          : null
+      );
     } catch (error) {
       console.error("Failed to fetch room:", error);
       toast.error("Failed to load room");
