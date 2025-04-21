@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useState, ChangeEvent, useCallback, memo } from "react";
+import {
+  useEffect,
+  useState,
+  ChangeEvent,
+  useCallback,
+  memo,
+  useRef,
+} from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +19,7 @@ import { toast } from "sonner";
 import api from "@/lib/services/api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { WebSocketStatus } from "@/components/websocket-status";
+import { ChevronDown } from "lucide-react";
 import dynamic from "next/dynamic";
 import {
   ExcalidrawImperativeAPI,
@@ -127,6 +135,27 @@ export default function RoomPage() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const router = useRouter();
+
+  // scroll handling
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
+  const scrollToBottom = useCallback(() => {
+    const el = containerRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, []);
+
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 10;
+    setIsAtBottom(atBottom);
+  };
+
+  // auto-scroll on new messages
+  useEffect(() => {
+    if (isAtBottom) scrollToBottom();
+  }, [messages, isAtBottom, scrollToBottom]);
 
   // Excalidraw API state
   const [excalidrawAPI, setExcalidrawAPI] =
@@ -381,7 +410,11 @@ export default function RoomPage() {
                 {connectionError}
               </div>
             ) : null}
-            <div className="flex-1 overflow-y-auto mb-4 space-y-4">
+            <div
+              ref={containerRef}
+              onScroll={handleScroll}
+              className="flex-1 overflow-y-auto mb-4 space-y-4"
+            >
               {messages.map((message, index) => (
                 <div
                   key={index}
@@ -405,7 +438,17 @@ export default function RoomPage() {
                   </div>
                 </div>
               ))}
+
+              {!isAtBottom && (
+                <button
+                  onClick={scrollToBottom}
+                  className="absolute bottom-2 right-2 bg-gray-700 p-2 rounded-full shadow-lg"
+                >
+                  <ChevronDown size={20} />
+                </button>
+              )}
             </div>
+
             <form onSubmit={handleSendMessage} className="flex gap-2">
               <Input
                 value={chatMessage}
