@@ -1,8 +1,14 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+from rest_framework.pagination import PageNumberPagination
 from .models import Room, Message, WebSocketTicket
 from .serializers import RoomSerializer, MessageSerializer, UserRegistrationSerializer, WebSocketTicketSerializer
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 50
 
 class UserRegistrationView(generics.CreateAPIView):
     serializer_class = UserRegistrationSerializer
@@ -20,6 +26,7 @@ class RoomListCreateView(generics.ListCreateAPIView):
     serializer_class = RoomSerializer
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [UserRateThrottle]
+    pagination_class = StandardResultsSetPagination
 
 class RoomDetailView(generics.RetrieveUpdateAPIView):
     queryset = Room.objects.all()
