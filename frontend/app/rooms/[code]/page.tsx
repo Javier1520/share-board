@@ -148,8 +148,8 @@ export default function RoomPage() {
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 10;
-    setIsAtBottom(atBottom);
+    //const atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 10;
+    //setIsAtBottom(atBottom);
   };
 
   // auto-scroll on new messages
