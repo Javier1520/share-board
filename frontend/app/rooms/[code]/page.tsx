@@ -135,6 +135,7 @@ export default function RoomPage() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const router = useRouter();
+  //const [messages, setMessages] = useState<MessageType[]>([]);
 
   // scroll handling
   const containerRef = useRef<HTMLDivElement>(null);
@@ -164,10 +165,13 @@ export default function RoomPage() {
 
   const fetchRoom = useCallback(async () => {
     try {
+      const messages = await api.get(`/api/rooms/${code}/messages`);
       const response = await api.get(`/api/rooms/${code}`);
+
+      console.log(code);
       const room = response.data;
       setCurrentRoom(room);
-      setMessages(room.messages || []);
+      setMessages(messages.data.results || []);
       setSharedText(room.shared_text || "");
       setDrawingData(
         room.drawing_data
@@ -203,18 +207,30 @@ export default function RoomPage() {
           switch (response.type) {
             case "chat.message":
               if (response.content && response.sender) {
+                let content = response.content;
+                try {
+                  const parsed = JSON.parse(response.content);
+                  if (parsed?.message) {
+                    content = parsed.message;
+                  }
+                } catch {
+                  // ignore if not JSON
+                }
+
                 const sender: User =
                   typeof response.sender === "string"
                     ? { username: response.sender }
                     : response.sender;
+
                 setMessages((prev) => [
                   ...prev,
                   {
-                    content: response.content,
-                    sender: sender,
+                    content,
+                    sender,
                   } as Message,
                 ]);
               }
+
               break;
             default:
               if (
