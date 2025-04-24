@@ -137,7 +137,7 @@ export default function RoomPage() {
   const router = useRouter();
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  //const [messages, setMessages] = useState<MessageType[]>([]);
+  const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
 
   // scroll handling
   const containerRef = useRef<HTMLDivElement>(null);
@@ -157,6 +157,7 @@ export default function RoomPage() {
   const fetchMoreMessages = async () => {
     if (!nextCursor || isLoadingMore) return;
     setIsLoadingMore(true);
+    setShouldScrollToBottom(false); // Don't scroll to bottom when loading older messages
 
     try {
       const chatContainer = containerRef.current;
@@ -192,12 +193,16 @@ export default function RoomPage() {
     }
   };
 
-  // auto-scroll on new messages
   useEffect(() => {
-    if (isAtBottom) scrollToBottom();
-  }, [messages, isAtBottom, scrollToBottom]);
+    const el = containerRef.current;
+    if (!el || !shouldScrollToBottom) return;
 
-  // Excalidraw API state
+    // Ensure the DOM is fully updated before scrolling
+    setTimeout(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }, 0);
+  }, [messages, shouldScrollToBottom]);
+
   const [excalidrawAPI, setExcalidrawAPI] =
     useState<ExcalidrawImperativeAPI | null>(null);
   const isExcalidrawReady = !!excalidrawAPI;
@@ -209,7 +214,6 @@ export default function RoomPage() {
 
       const room = roomResponse.data;
       setCurrentRoom(room);
-      // Reverse results so oldest is first in array, matching display order
       setMessages(messagesResponse.data.results.reverse() || []);
       setNextCursor(getCursorFromUrl(messagesResponse.data.next)); // Use 'next' cursor
       setSharedText(room.shared_text || "");
@@ -220,6 +224,7 @@ export default function RoomPage() {
             : room.drawing_data
           : null
       );
+      setShouldScrollToBottom(true); // Scroll to bottom on initial load
     } catch (error) {
       console.error("Failed to fetch room:", error);
       toast.error("Failed to load room");
@@ -269,6 +274,7 @@ export default function RoomPage() {
                     sender,
                   } as Message,
                 ]);
+                setShouldScrollToBottom(true); // Scroll to bottom when new messages arrive
               }
 
               break;
@@ -415,6 +421,7 @@ export default function RoomPage() {
 
     sendMessage(chatMessage);
     setChatMessage("");
+    setShouldScrollToBottom(true); // Make sure we scroll to bottom after sending a message
   };
 
   const handleNavigate = (action: () => void) => {
