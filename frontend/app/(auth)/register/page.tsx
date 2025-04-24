@@ -73,7 +73,7 @@ export default function RegisterPage() {
           </div>
           <Button
             type="submit"
-            className="w-full bg-purple-600 hover:bg-purple-700"
+            className="w-full hover:opacity-80"
             disabled={isLoading}
           >
             {isLoading ? "Registering..." : "Register"}
@@ -81,7 +81,7 @@ export default function RegisterPage() {
         </form>
         <p className="text-center text-gray-400">
           Already have an account?{" "}
-          <Link href="/login" className="text-purple-400 hover:text-purple-300">
+          <Link href="/login" className="text-primary hover:text-primary/80">
             Login
           </Link>
         </p>
