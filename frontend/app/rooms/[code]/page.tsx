@@ -154,7 +154,7 @@ export default function RoomPage() {
     return params.get("cursor");
   }
 
-  const fetchMoreMessages = async () => {
+  const fetchMoreMessages = useCallback(async () => {
     if (!nextCursor || isLoadingMore) return;
     setIsLoadingMore(true);
     setShouldScrollToBottom(false); // Don't scroll to bottom when loading older messages
@@ -163,7 +163,6 @@ export default function RoomPage() {
       const chatContainer = containerRef.current;
       if (!chatContainer) return;
 
-      // Calculate the distance from the bottom before loading new messages
       const scrollHeightBefore = chatContainer.scrollHeight;
       const scrollTopBefore = chatContainer.scrollTop;
       const distanceFromBottom =
@@ -176,11 +175,9 @@ export default function RoomPage() {
       setMessages((prevMessages) => [...newMessages, ...prevMessages]);
       setNextCursor(getCursorFromUrl(response.data.next)); // Update next cursor
 
-      // Adjust scroll position to maintain the same distance from the bottom
       if (chatContainer) {
         requestAnimationFrame(() => {
           const scrollHeightAfter = chatContainer.scrollHeight;
-          // Set scrollTop to maintain the same distance from the bottom
           chatContainer.scrollTop =
             scrollHeightAfter - chatContainer.clientHeight - distanceFromBottom;
         });
@@ -191,13 +188,12 @@ export default function RoomPage() {
     } finally {
       setIsLoadingMore(false);
     }
-  };
+  }, [nextCursor, isLoadingMore, code]);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !shouldScrollToBottom) return;
 
-    // Ensure the DOM is fully updated before scrolling
     setTimeout(() => {
       el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     }, 0);
@@ -333,7 +329,7 @@ export default function RoomPage() {
     const handleScrollMore = () => {
       const el = containerRef.current;
       if (!el) return;
-      const atTop = el.scrollTop <= 50; // Trigger slightly before the top for smoother UX
+      const atTop = el.scrollTop <= 50;
       const atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 10;
       setIsAtBottom(atBottom);
       if (atTop && nextCursor && !isLoadingMore) {
@@ -351,7 +347,7 @@ export default function RoomPage() {
         chatContainer.removeEventListener("scroll", handleScrollMore);
       }
     };
-  }, [nextCursor, isLoadingMore]);
+  }, [nextCursor, isLoadingMore, fetchMoreMessages]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -421,7 +417,7 @@ export default function RoomPage() {
 
     sendMessage(chatMessage);
     setChatMessage("");
-    setShouldScrollToBottom(true); // Make sure we scroll to bottom after sending a message
+    setShouldScrollToBottom(true);
   };
 
   const handleNavigate = (action: () => void) => {
