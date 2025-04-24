@@ -135,6 +135,8 @@ export default function RoomPage() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const router = useRouter();
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   //const [messages, setMessages] = useState<MessageType[]>([]);
 
   // scroll handling
@@ -146,11 +148,48 @@ export default function RoomPage() {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, []);
 
-  const handleScroll = () => {
-    const el = containerRef.current;
-    if (!el) return;
-    //const atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 10;
-    //setIsAtBottom(atBottom);
+  function getCursorFromUrl(url: string | null): string | null {
+    if (!url) return null;
+    const params = new URLSearchParams(url.split("?")[1]);
+    return params.get("cursor");
+  }
+
+  const fetchMoreMessages = async () => {
+    if (!nextCursor || isLoadingMore) return;
+    setIsLoadingMore(true);
+
+    try {
+      const chatContainer = containerRef.current;
+      if (!chatContainer) return;
+
+      // Calculate the distance from the bottom before loading new messages
+      const scrollHeightBefore = chatContainer.scrollHeight;
+      const scrollTopBefore = chatContainer.scrollTop;
+      const distanceFromBottom =
+        scrollHeightBefore - scrollTopBefore - chatContainer.clientHeight;
+
+      const response = await api.get(`/api/rooms/${code}/messages`, {
+        params: { cursor: nextCursor },
+      });
+      const newMessages = response.data.results.reverse(); // Oldest first in array
+      setMessages((prevMessages) => [...newMessages, ...prevMessages]);
+      setNextCursor(getCursorFromUrl(response.data.next)); // Update next cursor
+
+      // Adjust scroll position to maintain the same distance from the bottom
+      if (chatContainer) {
+        requestAnimationFrame(() => {
+          const scrollHeightAfter = chatContainer.scrollHeight;
+          // Set scrollTop to maintain the same distance from the bottom
+          chatContainer.scrollTop =
+            scrollHeightAfter - chatContainer.clientHeight - distanceFromBottom;
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch more messages:", error);
+      toast.error("Failed to load older messages");
+    } finally {
+      setIsLoadingMore(false);
+    }
   };
 
   // auto-scroll on new messages
@@ -165,13 +204,14 @@ export default function RoomPage() {
 
   const fetchRoom = useCallback(async () => {
     try {
-      const messages = await api.get(`/api/rooms/${code}/messages`);
-      const response = await api.get(`/api/rooms/${code}`);
+      const messagesResponse = await api.get(`/api/rooms/${code}/messages`);
+      const roomResponse = await api.get(`/api/rooms/${code}`);
 
-      console.log(code);
-      const room = response.data;
+      const room = roomResponse.data;
       setCurrentRoom(room);
-      setMessages(messages.data.results || []);
+      // Reverse results so oldest is first in array, matching display order
+      setMessages(messagesResponse.data.results.reverse() || []);
+      setNextCursor(getCursorFromUrl(messagesResponse.data.next)); // Use 'next' cursor
       setSharedText(room.shared_text || "");
       setDrawingData(
         room.drawing_data
@@ -282,6 +322,30 @@ export default function RoomPage() {
       };
     }
   }, [socket, excalidrawAPI]);
+
+  useEffect(() => {
+    const handleScrollMore = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      const atTop = el.scrollTop <= 50; // Trigger slightly before the top for smoother UX
+      const atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 10;
+      setIsAtBottom(atBottom);
+      if (atTop && nextCursor && !isLoadingMore) {
+        fetchMoreMessages();
+      }
+    };
+
+    const chatContainer = containerRef.current;
+    if (chatContainer) {
+      chatContainer.addEventListener("scroll", handleScrollMore);
+    }
+
+    return () => {
+      if (chatContainer) {
+        chatContainer.removeEventListener("scroll", handleScrollMore);
+      }
+    };
+  }, [nextCursor, isLoadingMore]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -423,9 +487,11 @@ export default function RoomPage() {
             ) : null}
             <div
               ref={containerRef}
-              onScroll={handleScroll}
               className="flex-1 overflow-y-auto mb-4 space-y-4"
             >
+              {isLoadingMore && (
+                <div className="text-center text-gray-400">...</div>
+              )}
               {messages.map((message, index) => (
                 <div
                   key={index}
@@ -449,7 +515,6 @@ export default function RoomPage() {
                   </div>
                 </div>
               ))}
-
               {!isAtBottom && (
                 <button
                   onClick={scrollToBottom}
